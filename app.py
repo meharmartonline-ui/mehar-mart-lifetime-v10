@@ -1,155 +1,205 @@
-# MEHAR MART V28 - ADMIN LOCK - CUSTOMER KO PROFIT/KHARID KABHI NAHI DIKHEGA
+# MEHAR MART V31 - FINAL COMPLETE - KUCH MISS NAHI - SAB KUCH HAI
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from PIL import Image
-import io
+import io, os
 
-st.set_page_config(page_title="MEHAR MART V28 LOCK", layout="wide")
+st.set_page_config(page_title="MEHAR MART V31 FINAL", layout="wide")
 
 if 'products' not in st.session_state: st.session_state.products = []
 if 'sales' not in st.session_state: st.session_state.sales = []
 if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
-# ADMIN LOCK SYSTEM
-st.sidebar.title("🔐 LOGIN")
-password = st.sidebar.text_input("Admin Password Likho", type="password", placeholder="Password")
-if st.sidebar.button("Admin Login"):
-    if password == "mehar123":  # <-- AAPKA PASSWORD - CHANGE KAR SAKTE HO BHAI
-        st.session_state.is_admin = True
-        st.sidebar.success("Admin Login Ho Gaya Bhai!")
-    else:
-        st.sidebar.error("Ghalat Password!")
+PASS_FILE = "admin_password.txt"
+def get_password():
+    if os.path.exists(PASS_FILE):
+        with open(PASS_FILE, "r") as f: return f.read().strip()
+    return "mehar123"
+def set_password(new_pass):
+    with open(PASS_FILE, "w") as f: f.write(new_pass)
 
-if st.sidebar.button("Logout - Customer View"):
-    st.session_state.is_admin = False
-    st.sidebar.info("Customer View Pe Chale Gaye")
+# LOGIN - AUTO - NO TANGI
+st.sidebar.title("🔐 ADMIN LOGIN")
+current_pass = get_password()
+pwd_input = st.sidebar.text_input("Password", type="password", placeholder="ek bar likho - mehar123")
 
-# MENU - ADMIN VS CUSTOMER
+if pwd_input == current_pass and pwd_input != "":
+    st.session_state.is_admin = True
+
 if st.session_state.is_admin:
-    st.sidebar.success("✅ ADMIN MODE - Aapko sab dikhega")
-    menu = st.sidebar.radio("ADMIN MENU - 7 SYSTEM", [
+    st.sidebar.success("✅ ADMIN MODE")
+    if st.sidebar.button("Logout - Customer View"):
+        st.session_state.is_admin = False
+        st.rerun()
+    # PASSWORD RESET - YAHAN HAI
+    st.sidebar.divider()
+    st.sidebar.subheader("🔑 Password Reset")
+    with st.sidebar.expander("Password Change Karo - Click"):
+        old = st.text_input("Purana Password", type="password", key="old")
+        new = st.text_input("Naya Password", type="password", key="new")
+        confirm = st.text_input("Confirm Naya", type="password", key="confirm")
+        if st.button("Change Karo"):
+            if old != current_pass: st.error("Purana ghalat!")
+            elif new == "": st.error("Naya khali!")
+            elif new != confirm: st.error("Match nahi!")
+            else:
+                set_password(new)
+                st.success(f"Ho gaya! Naya: {new}")
+                st.balloons()
+                st.rerun()
+    
+    menu = st.sidebar.radio("7 MENU - ADMIN", [
         "1. PRODUCT SYSTEM", "2. STOCK & EXPIRY", "3. SALES & ORDERS", 
         "4. MONEY SYSTEM", "5. CLIENT SYSTEM - EXCEL", "6. DARAZ STORE", "7. MARKETING KING"
     ])
 else:
-    st.sidebar.warning("👤 CUSTOMER VIEW - Sirf Store Dikhega - No Profit")
-    menu = "6. DARAZ STORE"  # Customer ko sirf Daraz Store dikhega
-    st.title("MEHAR MART STORE")
-    st.info("👋 Welcome to MEHAR MART - Best Products, Best Price!")
+    if pwd_input != "": st.sidebar.error("Ghalat password")
+    else: st.sidebar.warning("👤 CUSTOMER VIEW - Sirf Store")
+    menu = "6. DARAZ STORE"
+    st.title("MEHAR MART STORE 🛒")
+    st.info("Free Delivery | Cash on Delivery | 100% Pure - Best Price!")
 
-# 1. PRODUCT SYSTEM - SIRF ADMIN DEKHEGA
+# 1. PRODUCT SYSTEM
 if menu == "1. PRODUCT SYSTEM":
     st.header("1. PRODUCT SYSTEM - ADMIN ONLY - Customer Nahi Dekhega")
-    st.warning("🔒 Ye sirf aap dekh rahe ho - Customer kabhi nahi dekhega")
-    c1,c2 = st.columns(2)
-    with c1:
-        cat = st.selectbox("Category *", ["PURE HONEY","MASALA","DRY FRUIT","GADGET","ATTA","OTHER","OIL"])
-        name = st.text_input("Product Name *", "", placeholder="Pure Honey 500gm - MEHAR MART")
-        disc = st.number_input("Discount % - Upar", 0, 90, 15)
-        buy = st.number_input("Kharid Rate - ADMIN ONLY", 0, 100000, 2000, help="Ye sirf aap dekho ge, customer nahi")
-        sell = st.number_input("Selling Price *", 0, 100000, 3500)
+    st.success("Form ke andar likho - Paste mitega nahi - Login rahega")
 
-        final_price = int(sell * (1-disc/100)) if disc>0 else sell
-        profit = final_price - buy
+    with st.form("product_form", clear_on_submit=False):
+        c1,c2 = st.columns(2)
+        with c1:
+            cat = st.selectbox("Category *", ["PURE HONEY","MASALA","DRY FRUIT","GADGET","ATTA","OTHER","OIL","SHAMPOO","SOAP"])
+            name = st.text_input("Product Name *", "", placeholder="Pure Honey 500gm - Beri Honey - MEHAR MART")
+            disc = st.number_input("Discount % - UPAR HAI - Aapki Request", 0, 90, 15)
+            buy = st.number_input("Kharid Rate - ADMIN ONLY - Customer Nahi Dekhega", 0, 100000, 2000)
+            sell = st.number_input("Selling Price *", 0, 100000, 3500)
+            # NAYE 2 BOX - AAPKI REQUEST
+            final_price = int(sell * (1-disc/100)) if disc>0 else sell
+            profit = final_price - buy
+            st.number_input("Customer Pay Karega - BOX ME - Naya", value=final_price, disabled=True)
+            st.number_input("💰 Aapka Munafa - BOX ME - Naya - ADMIN ONLY", value=profit, disabled=True)
+            stock = st.number_input("Stock *", 0, 10000, 50)
+        with c2:
+            brand = st.text_input("Brand", "MEHAR MART")
+            weight = st.text_input("Weight", "500gm")
+            badge = st.selectbox("Badge", ["BEST SELLER","NEW","LIMITED STOCK","100% PURE","SALE","OFFER"])
+            delivery = st.selectbox("Delivery Option *", [
+                "🚚 Free Delivery - All Pakistan",
+                "💵 Cash on Delivery - All Pakistan",
+                "🚚 Free Delivery Karachi",
+                "💵 Cash on Delivery Karachi",
+                "💵 Cash on Delivery - Rs.150 Delivery Charge",
+                "🚚 Free Delivery Lahore / Karachi / Islamabad",
+                "🚚 Free Delivery Islamabad / Lahore"
+            ])
+            expiry = st.date_input("Expiry Date", datetime.now()+timedelta(days=365))
+        
+        highlights = st.text_area("Highlights", "", placeholder="100% Pure\nNo Sugar\nBeri Flowers", height=90)
+        desc = st.text_area("Full Description - Client Dekhega", "", placeholder="Pure honey, beri flowers se hasil, 100% original...", height=120)
+        specs = st.text_area("Specifications", "", placeholder="Weight: 500gm\nPurity: 100%\nOrigin: Karachi", height=90)
+        img_file = st.file_uploader("Photo Upload", type=["jpg","png","jpeg"])
 
-        st.number_input("Customer Pay Karega - BOX ME", value=final_price, disabled=True)
-        st.number_input("💰 Aapka Munafa - BOX ME - ADMIN ONLY", value=profit, disabled=True)
-        stock = st.number_input("Stock *", 0, 10000, 50)
-    with c2:
-        brand = st.text_input("Brand", "MEHAR MART")
-        weight = st.text_input("Weight", "500gm")
-        badge = st.selectbox("Badge", ["BEST SELLER","NEW","LIMITED STOCK","100% PURE","SALE"])
-        delivery = st.selectbox("Delivery Option *", ["🚚 Free Delivery - All Pakistan","💵 Cash on Delivery - All Pakistan","🚚 Free Delivery Karachi","💵 Cash on Delivery Karachi"])
-        expiry = st.date_input("Expiry", datetime.now()+timedelta(days=365))
-    
-    highlights = st.text_area("Highlights", "", height=80)
-    desc = st.text_area("Full Description", "", height=120)
-    specs = st.text_area("Specifications", "", height=80)
-    img_file = st.file_uploader("Photo Upload", type=["jpg","png","jpeg"])
+        st.divider()
+        st.markdown(f"### 💰 LIVE HISAAB - AAKHIR ME: Kharid Rs.{buy} | Selling Rs.{sell} | Discount {disc}% | Customer Pay Rs.{final_price} | Munafa Rs.{profit}")
 
-    if st.button("♾️ LIFETIME SAVE", use_container_width=True):
-        if not name: st.error("Name Likho Bhai!")
-        else:
-            img_bytes = img_file.getvalue() if img_file else None
-            st.session_state.products.append({
-                "date":str(datetime.now().date()),"category":cat,"name":name,"brand":brand,
-                "buy":buy,"sell":sell,"discount":disc,"final":final_price,"stock":stock,
-                "weight":weight,"expiry":str(expiry),"delivery":delivery,"badge":badge,
-                "highlights":highlights,"description":desc,"specs":specs,
-                "image_bytes":img_bytes,"profit":profit
-            })
-            st.success(f"Save Ho Gaya!"); st.balloons()
+        submitted = st.form_submit_button("♾️ LIFETIME SAVE - Click to Save", use_container_width=True)
+        if submitted:
+            if not name: st.error("Name Likho Bhai!")
+            else:
+                img_bytes = img_file.getvalue() if img_file else None
+                st.session_state.products.append({
+                    "date":str(datetime.now().date()),"category":cat,"name":name,"brand":brand,
+                    "buy":buy,"sell":sell,"discount":disc,"final":final_price,"stock":stock,
+                    "weight":weight,"expiry":str(expiry),"delivery":delivery,"badge":badge,
+                    "highlights":highlights,"description":desc,"specs":specs,
+                    "image_bytes":img_bytes,"profit":profit
+                })
+                st.success(f"Save Ho Gaya! Category: {cat} | Customer Pay Rs.{final_price} | Munafa Rs.{profit}"); st.balloons()
 
     st.divider()
-    st.subheader("✅ Our Products - Admin View")
+    st.subheader("✅ Our Products - Admin View") 
     if st.session_state.products:
         for p in st.session_state.products:
-            st.markdown(f"**{p['category']} | {p['name']} | Final Rs.{p['final']} | Buy Rs.{p['buy']} | Profit Rs.{p['profit']}** - ADMIN ONLY")
+            st.markdown(f"**{p['category']} | {p['name']} | Final Rs.{p['final']} (was Rs.{p['sell']}) {p['discount']}% OFF | {p['delivery']}**")
+            st.caption(f"ADMIN: Buy Rs.{p['buy']} Profit Rs.{p['profit']} - Customer ko ye nahi dikhega")
             if p.get('image_bytes'):
                 try: st.image(Image.open(io.BytesIO(p['image_bytes'])), width=250)
                 except: pass
+            if p.get('highlights'): st.info(p['highlights'])
+            if p.get('description'): st.write(p['description'])
+            if p.get('specs'): st.caption(p['specs'])
             st.divider()
 
 elif menu == "2. STOCK & EXPIRY":
-    st.header("2. STOCK - ADMIN ONLY")
+    st.header("2. STOCK & EXPIRY - ADMIN ONLY")
     if st.session_state.products:
         df=pd.DataFrame([{k:v for k,v in p.items() if k!='image_bytes'} for p in st.session_state.products])
-        st.dataframe(df[["category","name","stock","final","buy","profit"]], use_container_width=True)
+        st.dataframe(df[["date","category","name","stock","expiry","final","buy","profit"]], use_container_width=True)
+        st.bar_chart(df.groupby("category")["stock"].sum())
 
 elif menu == "3. SALES & ORDERS":
-    st.header("3. SALES - ADMIN ONLY")
-    cname=st.text_input("Customer Name", "")
-    city=st.text_input("City", "")
-    if st.session_state.products:
-        pname=st.selectbox("Product", [p['name'] for p in st.session_state.products])
-        qty=st.number_input("Qty",1,100,1)
-        if st.button("MASHALLAH SALE KARO"):
-            for p in st.session_state.products:
-                if p['name']==pname:
-                    p['stock']-=qty
-                    st.session_state.sales.append({"customer":cname,"city":city,"product":pname,"qty":qty,"total":p['final']*qty,"profit":(p['final']-p['buy'])*qty})
-                    st.success("Sale!")
+    st.header("3. SALES & ORDERS - ADMIN ONLY")
+    with st.form("sale_form"):
+        cname=st.text_input("Customer Name", "", placeholder="Ali")
+        city=st.text_input("City", "", placeholder="Karachi")
+        if st.session_state.products:
+            pname=st.selectbox("Product", [p['name'] for p in st.session_state.products])
+            qty=st.number_input("Qty",1,100,1)
+            s=st.form_submit_button("MASHALLAH SALE KARO")
+            if s:
+                for p in st.session_state.products:
+                    if p['name']==pname:
+                        p['stock']-=qty
+                        st.session_state.sales.append({"date":str(datetime.now().date()),"customer":cname,"city":city,"category":p['category'],"product":pname,"qty":qty,"total":p['final']*qty,"profit":(p['final']-p['buy'])*qty})
+                        st.success("Sale Ho Gayi!"); st.balloons()
+    if st.session_state.sales:
+        st.dataframe(pd.DataFrame(st.session_state.sales), use_container_width=True)
 
 elif menu == "4. MONEY SYSTEM":
-    st.header("4. MONEY SYSTEM - ADMIN ONLY - PROFIT YAHAN HAI")
+    st.header("4. MONEY SYSTEM - SIRF AAP - PRIVATE")
     if st.session_state.sales:
         df=pd.DataFrame(st.session_state.sales)
         st.dataframe(df, use_container_width=True)
-        st.metric("TOTAL MUNAFA - SIRF AAP", f"Rs. {df['profit'].sum()}")
+        c1,c2,c3=st.columns(3)
+        with c1: st.metric("TOTAL SALE", f"Rs. {df['total'].sum()}")
+        with c2: st.metric("TOTAL MUNAFA - SIRF AAP", f"Rs. {df['profit'].sum()}")
+        with c3: st.metric("TOTAL ORDERS", len(df))
+    else: st.info("Abhi koi sale nahi")
 
 elif menu == "5. CLIENT SYSTEM - EXCEL":
-    st.header("5. EXCEL - ADMIN ONLY")
+    st.header("5. CLIENT SYSTEM - EXCEL - ADMIN ONLY")
     if st.session_state.sales:
         df=pd.DataFrame(st.session_state.sales)
-        st.download_button("📥 EXCEL", df.to_csv(index=False).encode('utf-8'), "clients.csv", "text/csv")
+        st.dataframe(df, use_container_width=True)
+        st.download_button("📥 EXCEL DOWNLOAD", df.to_csv(index=False).encode('utf-8'), f"clients_{datetime.now().date()}.csv", "text/csv", use_container_width=True)
 
-# 6. DARAZ STORE - CUSTOMER + ADMIN DONO DEKH SAKTE HAIN - PAR PROFIT/KHARID KABHI NAHI
 elif menu == "6. DARAZ STORE":
     if st.session_state.is_admin:
-        st.header("6. DARAZ STORE - Customer View Preview - No Profit/Kharid Here")
+        st.header("6. DARAZ STORE - Customer View - NO Buy/Profit Here")
     else:
         st.header("🛒 MEHAR MART OFFICIAL STORE")
-        st.markdown("**Free Delivery | Cash on Delivery | 100% Pure**")
+        st.markdown("**🔥 Best Price | 🚚 Free Delivery | 💵 Cash on Delivery**")
     
     if not st.session_state.products:
-        st.warning("Abhi products add ho rahe hain - Jaldi ayenge!")
+        st.warning("Products jald ayenge!")
     else:
-        sel = st.selectbox("Category Filter", ["All"] + list(set([x['category'] for x in st.session_state.products])))
+        all_cats = ["All"] + list(set([x['category'] for x in st.session_state.products]))
+        sel = st.selectbox("Category Filter Karo", all_cats)
         for p in st.session_state.products:
             if sel!="All" and p['category']!=sel: continue
             col1,col2=st.columns([1,2])
             with col1:
                 if p.get('image_bytes'): st.image(Image.open(io.BytesIO(p['image_bytes'])), use_column_width=True)
+                else: st.info("No Photo")
             with col2:
                 st.subheader(p['name'])
-                st.caption(f"{p['category']} | {p['badge']} | {p['delivery']}")
-                # SIRF FINAL PRICE - NO BUY, NO PROFIT
+                st.caption(f"{p['category']} | {p['badge']} | {p['brand']} - {p['weight']} | {p['delivery']}")
                 st.markdown(f"### ~~Rs.{p['sell']}~~ **Rs.{p['final']}** ({p['discount']}% OFF)")
-                st.write(f"**Customer Pay: Rs.{p['final']} Only**")
+                st.write(f"Customer Pay: Rs.{p['final']} Only")
                 if p.get('highlights'): st.success(p['highlights'])
                 if p.get('description'): st.write(p['description'])
-                st.button(f"🛒 Order Now - {p['name']}", key=p['name'])
+                if p.get('specs'): st.caption(p['specs'])
+                st.button(f"🛒 Order Now - {p['name']}", key=f"order_{p['name']}")
             st.divider()
 
 else:
@@ -157,5 +207,6 @@ else:
     if st.session_state.products:
         pname=st.selectbox("Product", [x['name'] for x in st.session_state.products])
         prod=[x for x in st.session_state.products if x['name']==pname][0]
-        wa=f"🍯 *{prod['name']}* - Rs.{prod['final']} (was {prod['sell']})\n{prod['delivery']}\nOrder Now!"
-        st.text_area("WhatsApp Caption - Customer Ko Bhejo - No Profit", wa, height=200)
+        wa=f"🍯 *{prod['name']}* - {prod['category']}\nPrice: Rs.{prod['final']} (was Rs.{prod['sell']}) {prod['discount']}% OFF\n{prod['delivery']}\n{prod['description']}\nOrder Now: MEHAR MART"
+        st.text_area("WhatsApp Caption - No Profit - Customer Ko Bhejo", wa, height=220)
+        st.download_button("Copy Text", wa, "caption.txt")
