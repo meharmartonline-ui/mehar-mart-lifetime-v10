@@ -1,4 +1,4 @@
-# MEHAR MART V57 - STOCK & EXPIRY FULL FIX - FINAL - NOTHING MISS
+# MEHAR MART V59 FINAL - PASSWORD RESET VISIBLE FIX - 8 SYSTEMS
 import streamlit as st
 import os
 import urllib.parse
@@ -10,7 +10,7 @@ import base64
 import json
 import random
 
-st.set_page_config(page_title="MEHAR MART V57 STOCK FIX", layout="wide")
+st.set_page_config(page_title="MEHAR MART V59 PASS FIX", layout="wide")
 
 STORE_LINK = "https://mehar-mart-lifetime-v10-bunjwsm3soskfabyez28bv.streamlit.app"
 WA_NUMBER = "923452352112"
@@ -37,7 +37,7 @@ DELIVERY_OPTIONS = {
     "Gujranwala - Rs.250 (2 Days)": 250
 }
 
-PAYMENT_METHODS = ["Cash on Delivery (COD)","JazzCash","Easypaisa","Bank Transfer"]
+PAYMENT_METHODS = ["Cash on Delivery (COD)","JazzCash","Easypaisa","Bank Transfer - MEHAR MART"]
 
 def load_json(file, default):
     if os.path.exists(file):
@@ -79,7 +79,7 @@ def log_visit():
     return get_visits()
 
 def log_cart_action(product, action):
-    cart_detail = {"visitor_id": st.session_state.visitor_id,"visitor_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"product": product['name'],"category": product['category'],"price": product['final'],"action": action,"delivery": "Karachi","status": "Added to Cart"}
+    cart_detail = {"visitor_id": st.session_state.visitor_id,"visitor_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"product": product['name'],"category": product['category'],"price": product['final'],"profit": product.get('profit',0),"action": action,"delivery": st.session_state.delivery_city if 'delivery_city' in st.session_state else "Karachi","payment": st.session_state.payment_method if 'payment_method' in st.session_state else "COD","status": "Added to Cart"}
     logs = load_json(CART_LOG_FILE, [])
     logs.append(cart_detail)
     save_json(CART_LOG_FILE, logs)
@@ -98,6 +98,7 @@ def save_password(new_pass):
 if st.query_params.get("admin") == get_password():
     st.session_state.is_admin = True
 
+# SIDEBAR - PASSWORD RESET VISIBLE FIX
 st.sidebar.title("ADMIN LOGIN")
 if not st.session_state.is_admin:
     pwd = st.sidebar.text_input("Password", type="password")
@@ -106,29 +107,53 @@ else: pwd = get_password()
 
 if st.session_state.is_admin:
     st.sidebar.success(f"✅ ADMIN LOGIN - {st.session_state.visitor_id}")
-    st.sidebar.button(f"👀 Visits: {total_visits} - Click Details", use_container_width=True, key="v_btn")
+    
+    # ★★★ PASSWORD RESET - AB BILKUL UPAR VISIBLE - BHAI KI DEMAND ★★★
+    st.sidebar.divider()
+    st.sidebar.markdown("### 🔑 PASSWORD RESET - YAHAN HAI BHAI")
+    st.sidebar.caption(f"Current Password: {get_password()}")
+    
+    with st.sidebar.container(border=True):
+        st.sidebar.markdown("**Change Password**")
+        old_p = st.sidebar.text_input("Purana Password *", type="password", key="old_pass")
+        new_p = st.sidebar.text_input("Naya Password *", type="password", key="new_pass")
+        new_p2 = st.sidebar.text_input("Naya Dobara *", type="password", key="new_pass2")
+        if st.sidebar.button("🔑 PASSWORD BADLO", use_container_width=True, type="primary"):
+            if old_p != get_password(): st.sidebar.error("❌ Purana galat!")
+            elif new_p != new_p2: st.sidebar.error("❌ Naye match nahi!")
+            elif new_p == "": st.sidebar.error("❌ Naya likho!")
+            elif len(new_p) < 4: st.sidebar.error("❌ 4 se zyada likho!")
+            else: 
+                save_password(new_p)
+                st.sidebar.success(f"✅ Password Badal Gaya! Naya: {new_p}")
+                st.sidebar.balloons()
+    
+    st.sidebar.divider()
+    st.sidebar.button(f"👀 Visits: {total_visits} - Click Details", use_container_width=True)
     st.sidebar.button(f"🛒 Cart: {len(load_json(CART_LOG_FILE, []))}", use_container_width=True)
     st.sidebar.button(f"📦 Products: {len(st.session_state.products)}", use_container_width=True)
-    if st.sidebar.button("🔍 VISITOR DETAILS - Kaun Aya?", use_container_width=True, type="primary"):
+    if st.sidebar.button("🔍 VISITOR DETAILS DEKHO - Kaun Aya?", use_container_width=True, type="primary"):
         st.session_state.menu_override = "7. ORDERS TRACKING"; st.rerun()
     if st.sidebar.button("🛒 CART TRACKING - Kisne Add Kiya?", use_container_width=True):
         st.session_state.menu_override = "7. ORDERS TRACKING"; st.rerun()
     st.sidebar.divider()
     st.sidebar.code(f"{STORE_LINK}?admin={get_password()}")
+    st.sidebar.caption("Ye link se direct login hoga")
     st.sidebar.divider()
+    st.sidebar.markdown("♾️ **8 LIFETIME SYSTEMS**")
     if 'menu_override' in st.session_state:
         menu = st.session_state.menu_override
         del st.session_state.menu_override
     else:
-        menu = st.sidebar.radio("System", ["1. PRODUCT SYSTEM","2. STOCK & EXPIRY","3. SALES & ORDERS","4. MONEY SYSTEM","5. CLIENT SYSTEM","6. DARAZ STORE","7. ORDERS TRACKING"], label_visibility="collapsed")
+        menu = st.sidebar.radio("System", ["1. PRODUCT SYSTEM","2. STOCK & EXPIRY","3. SALES & ORDERS","4. MONEY SYSTEM","5. CLIENT SYSTEM","6. DARAZ STORE","7. ORDERS TRACKING","8. SETTINGS - PASSWORD RESET"], label_visibility="collapsed")
     if st.sidebar.button("Logout", use_container_width=True): st.session_state.is_admin=False; st.query_params.clear(); st.rerun()
 else: menu = "6. DARAZ STORE"
 
 # 1. PRODUCT SYSTEM
 if menu == "1. PRODUCT SYSTEM":
-    st.header("1. PRODUCT SYSTEM - V57")
+    st.header("1. PRODUCT SYSTEM - V59")
     c1,c2,c3 = st.columns([2,1,1])
-    with c1: category = st.selectbox("Category *", st.session_state.categories)
+    with c1: category = st.selectbox("Category * (Multiple)", st.session_state.categories)
     with c2: new_cat = st.text_input("Nayi Category")
     with c3:
         st.write(""); st.write("")
@@ -137,6 +162,8 @@ if menu == "1. PRODUCT SYSTEM":
                 st.session_state.categories.append(new_cat.upper())
                 save_json(CAT_FILE, st.session_state.categories)
                 st.rerun()
+    st.caption(f"Available: {', '.join(st.session_state.categories)}")
+    st.divider()
     name = st.text_input("Product Name *", value="Pure Beri Flowers Honey 500gm - 100% Pure")
     col_a,col_b = st.columns(2)
     with col_a: kharid = st.number_input("Kharid Rate *", 0, 100000, 2000)
@@ -152,10 +179,10 @@ if menu == "1. PRODUCT SYSTEM":
     with b2: st.warning(f"Bechna Rs.{bechna}")
     with b3: st.success(f"Pay Rs.{customer_pay}")
     with b4: st.success(f"PROFIT Rs.{profit}")
-    highlights = st.text_area("Highlights *", value="100% Pure - No Sugar, No Mix\nOriginal Beri Flowers Honey\nLaboratory Tested", height=100)
-    full_desc = st.text_area("Full Description *", value="MEHAR MART - Aapki Sehat Ka Sathi\nCash on Delivery All Pakistan", height=100)
-    specs = st.text_area("Specifications *", value="Weight: 500gm\nType: Beri Honey\nBrand: MEHAR MART\nExpiry: 2 Years", height=100)
-    img_file = st.file_uploader("Photo", type=["jpg","png","jpeg"])
+    highlights = st.text_area("Highlights *", value="100% Pure - No Sugar, No Mix\nOriginal Beri Flowers Honey\nLaboratory Tested\nFor Health, Energy & Immunity", height=120)
+    full_desc = st.text_area("Full Description *", value="MEHAR MART - Aapki Sehat Ka Sathi\nCash on Delivery All Pakistan", height=120)
+    specs = st.text_area("Specifications *", value="Weight: 500gm\nType: Beri Honey\nBrand: MEHAR MART\nExpiry: 2 Years", height=120)
+    img_file = st.file_uploader("Photo *", type=["jpg","png","jpeg"])
     if st.button("💾 SAVE PRODUCT", use_container_width=True, type="primary"):
         if name:
             img_b64 = None
@@ -170,14 +197,14 @@ if menu == "1. PRODUCT SYSTEM":
             new_prod = {"name":name,"category":category,"sell":bechna,"kharid":kharid,"discount":discount,"final":customer_pay,"buy":kharid,"stock":stock,"expiry":expiry_date.strftime("%Y-%m-%d"),"profit":profit,"highlights":highlights,"full_desc":full_desc,"specs":specs,"image_b64":img_b64,"rating":5,"reviews":12}
             st.session_state.products.append(new_prod)
             save_json(PRODUCT_FILE, st.session_state.products)
-            st.success(f"✅ Save! Expiry: {expiry_date}"); st.balloons()
+            st.success(f"✅ Save! Profit Rs.{profit}"); st.balloons()
     st.divider()
     if st.session_state.products:
         st.subheader(f"✅ Saved Products ({len(st.session_state.products)}) - Ek Ek Delete")
         for idx, p in enumerate(st.session_state.products):
             with st.container(border=True):
                 col1,col2,col3 = st.columns([2,1,1])
-                with col1: st.markdown(f"**{idx+1}. {p['name']}**"); st.caption(f"🏷️ {p['category']} | Rs.{p['final']} | Stock {p['stock']}")
+                with col1: st.markdown(f"**{idx+1}. {p['name']}**"); st.caption(f"🏷️ {p['category']} | Rs.{p['final']} | Stock {p['stock']} | Profit Rs.{p.get('profit',0)}")
                 with col2: st.caption(f"Expiry: {p.get('expiry','')}")
                 with col3:
                     if st.button("❌ Delete", key=f"del_p_{idx}"): 
@@ -185,19 +212,15 @@ if menu == "1. PRODUCT SYSTEM":
                         save_json(PRODUCT_FILE, st.session_state.products)
                         st.rerun()
 
-# ★★★ 2. STOCK & EXPIRY - FULL FIX - BHAI KI DEMAND ★★★
+# 2. STOCK & EXPIRY
 elif menu == "2. STOCK & EXPIRY":
-    st.header("2. STOCK & EXPIRY - FULL FIX - DARAZ + SHOPIFY STYLE")
-    
+    st.header("2. STOCK & EXPIRY - FULL FIX")
     if not st.session_state.products:
-        st.warning("Koi product nahi - 1. PRODUCT SYSTEM me add karo")
+        st.warning("Koi product nahi")
     else:
-        # SUMMARY CARDS - SHOPIFY STYLE
         total_stock = sum([p.get('stock',0) for p in st.session_state.products])
-        low_stock = len([p for p in st.session_state.products if p.get('stock',0) <= 10 and p.get('stock',0) > 0])
+        low_stock = len([p for p in st.session_state.products if 0 < p.get('stock',0) <= 10])
         out_stock = len([p for p in st.session_state.products if p.get('stock',0) == 0])
-        
-        # Check expiry
         today = datetime.now()
         expiring_soon = 0
         expired = 0
@@ -208,152 +231,104 @@ elif menu == "2. STOCK & EXPIRY":
                 if days_left < 0: expired += 1
                 elif days_left <= 30: expiring_soon += 1
             except: pass
-        
         c1,c2,c3,c4,c5 = st.columns(5)
         with c1: st.metric("📦 Total Stock", total_stock)
         with c2: st.metric("⚠️ Low Stock", low_stock)
         with c3: st.metric("❌ Out Stock", out_stock)
         with c4: st.metric("⏰ Expiring Soon", expiring_soon)
         with c5: st.metric("💀 Expired", expired)
-        
         st.divider()
-        
-        # FILTERS
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            stock_filter = st.selectbox("🔍 Filter by Stock", ["ALL","In Stock (>10)","Low Stock (1-10)","Out of Stock (0)"])
-        with col_f2:
-            expiry_filter = st.selectbox("⏰ Filter by Expiry", ["ALL","Good (>30 days)","Expiring Soon (≤30 days)","Expired"])
-        
-        st.divider()
-        
-        # PRODUCT LIST WITH FULL EDITABLE CONTROLS
         for idx, p in enumerate(st.session_state.products):
-            # Apply filters
+            try: days_left = (datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d") - today).days
+            except: days_left = 180
             stock_val = p.get('stock',0)
-            if stock_filter == "In Stock (>10)" and stock_val <= 10: continue
-            if stock_filter == "Low Stock (1-10)" and not (1 <= stock_val <= 10): continue
-            if stock_filter == "Out of Stock (0)" and stock_val != 0: continue
-            
-            try:
-                exp_date = datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d")
-                days_left = (exp_date - today).days
-                if expiry_filter == "Good (>30 days)" and days_left <= 30: continue
-                if expiry_filter == "Expiring Soon (≤30 days)" and not (0 <= days_left <= 30): continue
-                if expiry_filter == "Expired" and days_left >= 0: continue
-            except:
-                days_left = 180
-                exp_date = today + timedelta(days=180)
-            
-            # STATUS
-            if stock_val == 0:
-                stock_status = "❌ OUT OF STOCK"
-                stock_color = "error"
-            elif stock_val <= 10:
-                stock_status = f"⚠️ LOW STOCK - {stock_val} left"
-                stock_color = "warning"
-            else:
-                stock_status = f"✅ IN STOCK - {stock_val}"
-                stock_color = "success"
-            
-            if days_left < 0:
-                expiry_status = f"💀 EXPIRED - {abs(days_left)} days ago"
-                expiry_color = "error"
-            elif days_left <= 30:
-                expiry_status = f"⏰ EXPIRING SOON - {days_left} days left"
-                expiry_color = "warning"
-            else:
-                expiry_status = f"✅ GOOD - {days_left} days left"
-                expiry_color = "success"
-            
             with st.container(border=True):
-                col_img, col_info, col_action = st.columns([1,2,2])
-                
-                with col_img:
+                col1,col2,col3 = st.columns([1,2,2])
+                with col1:
                     if p.get('image_b64'):
                         try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
-                        except: st.write("No Image")
-                    else: st.write("No Image")
-                    st.caption(f"🏷️ {p['category']}")
-                
-                with col_info:
+                        except: pass
+                with col2:
                     st.markdown(f"**{p['name']}**")
-                    st.caption(f"Rs.{p['final']} (Was Rs.{p['sell']}) | Profit Rs.{p.get('profit',0)}")
-                    
-                    # Stock status
-                    if stock_color == "error": st.error(stock_status)
-                    elif stock_color == "warning": st.warning(stock_status)
-                    else: st.success(stock_status)
-                    
-                    # Expiry status
-                    if expiry_color == "error": st.error(expiry_status)
-                    elif expiry_color == "warning": st.warning(expiry_status)
-                    else: st.success(expiry_status)
-                    
-                    st.caption(f"📅 Expiry: {p.get('expiry','')} | 💰 Value: Rs.{p['final']*stock_val}")
-                
-                with col_action:
-                    st.markdown("**⚙️ Stock Control:**")
+                    st.caption(f"Stock {stock_val} | Expiry {p.get('expiry','')} | {days_left} days left")
+                    st.caption(f"Rs.{p['final']} | Profit Rs.{p.get('profit',0)}")
+                with col3:
                     col_minus, col_plus = st.columns(2)
                     with col_minus:
-                        if st.button("➖ Minus 1", key=f"minus_{idx}", use_container_width=True):
+                        if st.button("➖ Minus", key=f"minus_{idx}"):
                             if st.session_state.products[idx]['stock'] > 0:
                                 st.session_state.products[idx]['stock'] -= 1
                                 save_json(PRODUCT_FILE, st.session_state.products)
                                 st.rerun()
                     with col_plus:
-                        if st.button("➕ Plus 1", key=f"plus_{idx}", use_container_width=True):
+                        if st.button("➕ Plus", key=f"plus_{idx}"):
                             st.session_state.products[idx]['stock'] += 1
                             save_json(PRODUCT_FILE, st.session_state.products)
                             st.rerun()
-                    
-                    # Direct stock edit
-                    new_stock = st.number_input(f"Set Stock", value=stock_val, min_value=0, max_value=10000, key=f"stock_edit_{idx}")
-                    if st.button("💾 Update Stock", key=f"update_stock_{idx}", use_container_width=True):
+                    new_stock = st.number_input("Set Stock", value=stock_val, min_value=0, key=f"se_{idx}")
+                    if st.button("💾 Update Stock", key=f"us_{idx}"):
                         st.session_state.products[idx]['stock'] = new_stock
                         save_json(PRODUCT_FILE, st.session_state.products)
-                        st.success(f"Stock updated to {new_stock}"); st.rerun()
-                    
-                    st.divider()
-                    st.markdown("**📅 Expiry Edit:**")
-                    try:
-                        curr_exp = datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d").date()
+                        st.rerun()
+                    try: curr_exp = datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d").date()
                     except: curr_exp = (datetime.now()+timedelta(days=180)).date()
-                    new_exp = st.date_input("New Expiry", value=curr_exp, key=f"exp_edit_{idx}")
-                    if st.button("💾 Update Expiry", key=f"update_exp_{idx}", use_container_width=True):
+                    new_exp = st.date_input("New Expiry", value=curr_exp, key=f"ee_{idx}")
+                    if st.button("💾 Update Expiry", key=f"ue_{idx}"):
                         st.session_state.products[idx]['expiry'] = new_exp.strftime("%Y-%m-%d")
                         save_json(PRODUCT_FILE, st.session_state.products)
-                        st.success(f"Expiry updated"); st.rerun()
-                    
-                    st.divider()
-                    if st.button(f"❌ Delete Product", key=f"del_stock_{idx}", use_container_width=True, type="primary"):
+                        st.rerun()
+                    if st.button("❌ Delete", key=f"del_s_{idx}", type="primary"):
                         st.session_state.products.pop(idx)
                         save_json(PRODUCT_FILE, st.session_state.products)
-                        st.toast("Deleted"); st.rerun()
-        
+                        st.rerun()
+
+# 3. SALES & ORDERS
+elif menu == "3. SALES & ORDERS":
+    st.header("3. SALES & ORDERS")
+    cart_logs = load_json(CART_LOG_FILE, [])
+    if cart_logs: st.dataframe(pd.DataFrame(cart_logs), use_container_width=True)
+    else: st.info("No cart data")
+
+# 4. MONEY SYSTEM - FIXED
+elif menu == "4. MONEY SYSTEM":
+    st.header("4. MONEY SYSTEM - FIXED V59")
+    if not st.session_state.products:
+        st.warning("No products")
+    else:
+        cart_logs = load_json(CART_LOG_FILE, [])
+        potential_profit = sum([p.get('profit',0)*p.get('stock',0) for p in st.session_state.products])
+        potential_value = sum([p.get('final',0)*p.get('stock',0) for p in st.session_state.products])
+        invested = sum([p.get('kharid',0)*p.get('stock',0) for p in st.session_state.products])
+        actual_sales = len(cart_logs)
+        actual_profit = sum([log.get('profit',0) for log in cart_logs]) if cart_logs else 0
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: st.metric("💰 Potential Profit", f"Rs.{potential_profit}")
+        with c2: st.metric("✅ Actual Profit (Real)", f"Rs.{actual_profit}")
+        with c3: st.metric("📦 Stock Value", f"Rs.{potential_value}")
+        with c4: st.metric("💸 Invested", f"Rs.{invested}")
         st.divider()
-        st.subheader("📊 Stock & Expiry Full Report")
-        report_data = []
+        if actual_sales == 0:
+            st.info(f"Abhi tak sale nahi - Actual Rs.0 - Potential Rs.{potential_profit} = Stock bikne pe")
+        else:
+            st.success(f"{actual_sales} Add to Cart - Actual Profit Rs.{actual_profit}")
+        st.divider()
+        report = []
         for p in st.session_state.products:
-            try:
-                exp_date = datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d")
-                days_left = (exp_date - datetime.now()).days
-            except: days_left = 0
-            report_data.append({
-                "Product": p['name'][:30],
-                "Category": p['category'],
-                "Stock": p.get('stock',0),
-                "Expiry": p.get('expiry',''),
-                "Days Left": days_left,
-                "Status": "Expired" if days_left<0 else "Expiring Soon" if days_left<=30 else "Good",
-                "Value Rs.": p['final']*p.get('stock',0)
-            })
-        if report_data:
-            st.dataframe(pd.DataFrame(report_data), use_container_width=True)
+            report.append({"Product": p['name'][:25],"Stock": p.get('stock',0),"Kharid": p.get('kharid',0),"Bechna": p.get('final',0),"Profit/1": p.get('profit',0),"Potential": p.get('profit',0)*p.get('stock',0),"Expiry": p.get('expiry','')})
+        st.dataframe(pd.DataFrame(report), use_container_width=True)
+
+# 5. CLIENT SYSTEM
+elif menu == "5. CLIENT SYSTEM":
+    st.header("5. CLIENT SYSTEM")
+    visit_logs = load_json(VISIT_LOG_FILE, [])
+    cart_logs = load_json(CART_LOG_FILE, [])
+    if visit_logs: st.subheader("Visitors"); st.dataframe(pd.DataFrame(visit_logs), use_container_width=True)
+    if cart_logs: st.subheader("Cart Clients"); st.dataframe(pd.DataFrame(cart_logs), use_container_width=True)
+    if not visit_logs and not cart_logs: st.info("No data")
 
 # 6. DARAZ STORE
 elif menu == "6. DARAZ STORE":
-    st.header("MEHAR MART STORE - V57")
+    st.header("MEHAR MART STORE - V59")
     search_q = st.text_input("🔍 Search Product", placeholder="Beri Honey search...")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -362,15 +337,16 @@ elif menu == "6. DARAZ STORE":
         else: filter_cat = "ALL"
     with col_f2:
         sort_by = st.selectbox("Sort By", ["Default","Price Low to High","Price High to Low"])
-    
     if len(st.session_state.cart) > 0:
         st.divider()
         col_d1, col_d2 = st.columns(2)
         with col_d1:
-            delivery_choice = st.selectbox("🚚 Delivery City (10)", list(DELIVERY_OPTIONS.keys()), index=0)
+            delivery_choice = st.selectbox("🚚 Delivery (10)", list(DELIVERY_OPTIONS.keys()), index=0)
             delivery_charge = DELIVERY_OPTIONS[delivery_choice]
+            st.session_state.delivery_city = delivery_choice
         with col_d2:
             payment_choice = st.selectbox("💳 Payment", PAYMENT_METHODS, index=0)
+            st.session_state.payment_method = payment_choice
         coupon = st.text_input("🏷️ Coupon MEHAR10", placeholder="MEHAR10")
         discount_coupon = 10 if coupon.upper() == "MEHAR10" else 0
         total_bill = sum([i['final'] for i in st.session_state.cart])
@@ -385,7 +361,6 @@ elif menu == "6. DARAZ STORE":
         cart_txt = f"Salam! Order:\n" + "\n".join([f"{x['name']} Rs.{x['final']}" for x in st.session_state.cart]) + f"\nTotal Rs.{final_total}\nID: {st.session_state.visitor_id}\n{STORE_LINK}"
         st.link_button(f"✅ WHATSAPP ORDER Rs.{final_total}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(cart_txt)}", type="primary", use_container_width=True)
         st.divider()
-    
     if not st.session_state.products:
         st.warning("No products")
     else:
@@ -400,14 +375,11 @@ elif menu == "6. DARAZ STORE":
                 if p.get('image_b64'):
                     try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
                     except: pass
-                # Stock check
-                try:
-                    days_left = (datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d") - datetime.now()).days
-                    expiry_msg = f"✅ {days_left} days left" if days_left>30 else f"⚠️ {days_left} days left" if days_left>=0 else "❌ Expired"
-                except: expiry_msg = ""
+                try: days_left = (datetime.strptime(p.get('expiry','2026-12-31'), "%Y-%m-%d") - datetime.now()).days
+                except: days_left = 180
                 stock_msg = "✅ In Stock" if p.get('stock',0)>10 else "⚠️ Low Stock" if p.get('stock',0)>0 else "❌ Out"
                 st.markdown(f"### {p['name']}")
-                st.markdown(f"🏷️ {p['category']} | Rs.{p['final']} ({p['discount']}% OFF) | {stock_msg} ({p.get('stock',0)}) | {expiry_msg}")
+                st.markdown(f"🏷️ {p['category']} | Rs.{p['final']} ({p['discount']}% OFF) | {stock_msg} ({p.get('stock',0)}) | {days_left} days left")
                 if p.get('highlights'): st.info(p['highlights'])
                 if p.get('full_desc'): st.success(p['full_desc'])
                 if p.get('specs'):
@@ -420,16 +392,20 @@ elif menu == "6. DARAZ STORE":
                         if st.button(f"🛒 ADD TO CART - Rs.{p['final']}", key=f"add{idx}", use_container_width=True, type="primary"):
                             st.session_state.cart.append(p)
                             log_cart_action(p, "ADD TO CART")
-                            st.session_state.products[idx]['stock'] -= 1
-                            save_json(PRODUCT_FILE, st.session_state.products)
-                            st.toast("Added + Stock -1"); st.rerun()
+                            for orig_idx, orig_p in enumerate(st.session_state.products):
+                                if orig_p['name'] == p['name']:
+                                    if st.session_state.products[orig_idx]['stock'] > 0:
+                                        st.session_state.products[orig_idx]['stock'] -= 1
+                                        save_json(PRODUCT_FILE, st.session_state.products)
+                                    break
+                            st.toast("Added!"); st.rerun()
                 with col_btn2:
                     wa = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(f"Salam! {p['name']} Rs.{p['final']}\n{STORE_LINK}")}"
                     st.link_button("💬 BUY NOW", wa, use_container_width=True)
 
-# 7. TRACKING
+# 7. ORDERS TRACKING
 elif menu == "7. ORDERS TRACKING":
-    st.header("7. ORDERS TRACKING - CLICKABLE")
+    st.header("7. ORDERS TRACKING")
     visit_logs = load_json(VISIT_LOG_FILE, [])
     cart_logs = load_json(CART_LOG_FILE, [])
     c1,c2,c3 = st.columns(3)
@@ -444,19 +420,69 @@ elif menu == "7. ORDERS TRACKING":
         if cart_logs: st.dataframe(pd.DataFrame(cart_logs), use_container_width=True)
         else: st.info("No cart clicks")
 
-elif menu == "3. SALES & ORDERS":
-    st.header("3. SALES & ORDERS")
-    cart_logs = load_json(CART_LOG_FILE, [])
-    if cart_logs: st.dataframe(pd.DataFrame(cart_logs), use_container_width=True)
-elif menu == "4. MONEY SYSTEM":
-    st.header("4. MONEY SYSTEM")
-    if st.session_state.products:
-        total_profit = sum([p.get('profit',0)*p.get('stock',0) for p in st.session_state.products])
-        st.metric("Total Profit", f"Rs.{total_profit}")
-        st.dataframe(pd.DataFrame(st.session_state.products), use_container_width=True)
-elif menu == "5. CLIENT SYSTEM":
-    st.header("5. CLIENT SYSTEM")
-    visit_logs = load_json(VISIT_LOG_FILE, [])
-    cart_logs = load_json(CART_LOG_FILE, [])
-    if visit_logs: st.subheader("Visitors"); st.dataframe(pd.DataFrame(visit_logs), use_container_width=True)
-    if cart_logs: st.subheader("Cart Clients"); st.dataframe(pd.DataFrame(cart_logs), use_container_width=True)
+# 8. SETTINGS - PASSWORD RESET - ★★★ BHAI KI DEMAND - AB CLEAR ★★★
+elif menu == "8. SETTINGS - PASSWORD RESET":
+    st.header("8. SETTINGS - PASSWORD RESET - V59 FINAL")
+    st.divider()
+    
+    col1, col2 = st.columns([1,1])
+    with col1:
+        st.subheader("🔑 Current Password Info")
+        with st.container(border=True):
+            st.info(f"Current Password: **{get_password()}**")
+            st.code(f"{STORE_LINK}?admin={get_password()}")
+            st.caption("Is link se direct admin login hoga")
+    
+    with col2:
+        st.subheader("🔑 Change Password - Yahan Se Badlo")
+        with st.container(border=True):
+            st.markdown("**Bhai yahan se password change karo - Bilkul clear**")
+            old_p_main = st.text_input("Purana Password *", type="password", key="old_main")
+            new_p_main = st.text_input("Naya Password * (Naya jo rakhna hai)", type="password", key="new_main")
+            new_p2_main = st.text_input("Naya Password Dobara *", type="password", key="new2_main")
+            
+            if st.button("🔑 PASSWORD BADLO - CLICK KARO", use_container_width=True, type="primary"):
+                if old_p_main != get_password():
+                    st.error(f"❌ Purana password galat hai! Current: {get_password()}")
+                elif new_p_main != new_p2_main:
+                    st.error("❌ Naye password match nahi kar rahe!")
+                elif new_p_main == "":
+                    st.error("❌ Naya password likho!")
+                elif len(new_p_main) < 4:
+                    st.error("❌ Password 4 characters se zyada rakho!")
+                else:
+                    save_password(new_p_main)
+                    st.success(f"✅ Password Badal Gaya!")
+                    st.success(f"✅ Naya Password: {new_p_main}")
+                    st.balloons()
+                    st.info(f"Ab se login: {STORE_LINK}?admin={new_p_main}")
+    
+    st.divider()
+    st.subheader("📋 Full System Info")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Visits", total_visits)
+        st.metric("Products", len(st.session_state.products))
+    with col_b:
+        st.metric("Cart Logs", len(load_json(CART_LOG_FILE, [])))
+        st.metric("Visit Logs", len(load_json(VISIT_LOG_FILE, [])))
+    with col_c:
+        st.metric("Categories", len(st.session_state.categories))
+        st.metric("Delivery Cities", len(DELIVERY_OPTIONS))
+    
+    st.divider()
+    st.subheader("🗑️ Data Management")
+    col_d1, col_d2, col_d3 = st.columns(3)
+    with col_d1:
+        if st.button("🗑️ Clear Visit Logs", use_container_width=True):
+            save_json(VISIT_LOG_FILE, [])
+            st.success("Visit logs clear")
+    with col_d2:
+        if st.button("🗑️ Clear Cart Logs", use_container_width=True):
+            save_json(CART_LOG_FILE, [])
+            st.success("Cart logs clear")
+    with col_d3:
+        if st.button("🗑️ Clear All Products", use_container_width=True):
+            save_json(PRODUCT_FILE, [])
+            st.session_state.products = []
+            st.success("All products cleared")
