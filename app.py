@@ -262,3 +262,27 @@ elif menu == "7. ORDERS TRACKING":
     with c2: st.metric("Orders", len(st.session_state.orders))
     st.metric("Saved Products", len(st.session_state.products))
     st.dataframe(pd.DataFrame(list(DELIVERY_OPTIONS.items()), columns=["City","Charge"]), use_container_width=True)
+    # ★★★ SINGLE DELETE - EK EK KARKE - BHAI KI DEMAND ★★★
+    st.divider()
+    if st.session_state.products:
+        st.subheader(f"✅ Saved Products ({len(st.session_state.products)}) - Ek Ek Delete Karo")
+        st.caption("Har product ke saath Delete button hai - Ek dabao, ek delete")
+        st.divider()
+        
+        for idx, p in enumerate(st.session_state.products):
+            with st.container(border=True):
+                col1, col2 = st.columns([3,1])
+                with col1:
+                    st.markdown(f"**{idx+1}. {p['name']}**")
+                    st.caption(f"🏷️ {p['category']} | Rs.{p['final']} | Profit Rs.{p.get('profit',0)}")
+                    st.caption(f"Stock: {p.get('stock',0)} | {p.get('highlights','')[:50]}")
+                with col2:
+                    st.write("")
+                    if st.button(f"❌ Delete", key=f"single_del_{idx}", use_container_width=True, type="primary"):
+                        deleted_name = p['name']
+                        st.session_state.products.pop(idx)
+                        save_json(PRODUCT_FILE, st.session_state.products)
+                        st.toast(f"Delete: {deleted_name}")
+                        st.rerun()
+    else:
+        st.info("Koi product nahi hai")
