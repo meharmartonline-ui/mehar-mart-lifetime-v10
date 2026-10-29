@@ -1,4 +1,4 @@
-# MEHAR MART V52 - DELIVERY 10 OPTION + MULTI CATEGORY + PERSISTENT - FINAL
+# MEHAR MART V54 - DESCRIPTION SHOW FIX - BHAI KA MASLA HAL
 import streamlit as st
 import os
 import urllib.parse
@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import base64
 import json
 
-st.set_page_config(page_title="MEHAR MART V52 DELIVERY 10", layout="wide")
+st.set_page_config(page_title="MEHAR MART V54 DESC SHOW", layout="wide")
 
 STORE_LINK = "https://mehar-mart-lifetime-v10-bunjwsm3soskfabyez28bv.streamlit.app"
 WA_NUMBER = "923452352112"
@@ -22,7 +22,6 @@ CAT_FILE = "categories.json"
 
 DEFAULT_CATS = ["PURE HONEY","SIDR HONEY","BERI HONEY","DESI GHEE","SARSON OIL","DRY FRUITS","DATES - KHAJOOR","SPICES - MASALAY","HERBAL PRODUCTS","OTHER"]
 
-# ★★★ DELIVERY 10 OPTION - BHAI KA MISS WALA BOX ★★★
 DELIVERY_OPTIONS = {
     "Karachi - Rs.150 (Same Day)": 150,
     "Lahore - Rs.200 (1-2 Days)": 200,
@@ -114,9 +113,7 @@ if st.session_state.is_admin:
             elif new_p=="": st.sidebar.error("Likho!")
             else: save_password(new_p); st.sidebar.success(f"New: {new_p}")
     st.sidebar.divider()
-    st.sidebar.markdown("🔗 Auto Login Link")
-    auto_link = f"{STORE_LINK}?admin={get_password()}"
-    st.sidebar.code(auto_link)
+    st.sidebar.code(f"{STORE_LINK}?admin={get_password()}")
     st.sidebar.divider()
     st.sidebar.markdown("♾️ **7 LIFETIME SYSTEMS**")
     menu = st.sidebar.radio("System", ["1. PRODUCT SYSTEM","2. STOCK & EXPIRY","3. SALES & ORDERS","4. MONEY SYSTEM","5. CLIENT SYSTEM","6. DARAZ STORE","7. ORDERS TRACKING"], label_visibility="collapsed")
@@ -125,9 +122,9 @@ if st.session_state.is_admin:
 else: menu = "6. DARAZ STORE"
 
 if menu == "1. PRODUCT SYSTEM":
-    st.header("1. PRODUCT SYSTEM - MULTI CATEGORY + DELIVERY")
+    st.header("1. PRODUCT SYSTEM")
     c1,c2,c3 = st.columns([2,1,1])
-    with c1: category = st.selectbox("Category * (Multiple)", st.session_state.categories)
+    with c1: category = st.selectbox("Category *", st.session_state.categories)
     with c2: new_cat = st.text_input("Nayi Category", placeholder="DESI GHEE")
     with c3:
         st.write(""); st.write("")
@@ -137,20 +134,11 @@ if menu == "1. PRODUCT SYSTEM":
                 save_json(CAT_FILE, st.session_state.categories)
                 st.success(f"{new_cat.upper()} Add!")
                 st.rerun()
-    st.caption(f"Available: {', '.join(st.session_state.categories)}")
-    
-    # ★★★ DELIVERY BOX YAHAN BHI DIKHAO - ADMIN KE LIYE ★★★
     st.divider()
-    st.subheader("🚚 Delivery Settings (10 Cities)")
-    st.caption("Customer ko 6. DARAZ STORE me ye 10 option dikhenge:")
-    for city, charge in DELIVERY_OPTIONS.items():
-        st.write(f"• {city}")
-    st.divider()
-    
-    name = st.text_input("Product Name *")
+    name = st.text_input("Product Name *", value="Pure Beri Flowers Honey 500gm - 100% Pure")
     col_a,col_b = st.columns(2)
     with col_a: kharid = st.number_input("Kharid Rate *", 0, 100000, 2000)
-    with col_b: bechna = st.number_input("Bechne Rate *", 0, 100000, 2500)
+    with col_b: bechna = st.number_input("Bechne Rate *", 0, 100000, 3500)
     discount = st.number_input("Discount %", 0, 90, 15)
     stock = st.number_input("Stock", 0, 10000, 50)
     customer_pay = int(bechna * (1 - discount/100))
@@ -161,58 +149,66 @@ if menu == "1. PRODUCT SYSTEM":
     with b3: st.success(f"Pay\nRs.{customer_pay}")
     with b4: st.success(f"PROFIT\nRs.{profit}")
     st.divider()
-    highlights = st.text_area("Highlights", height=80)
-    full_desc = st.text_area("Full Description", height=80)
-    specs = st.text_area("Specifications", height=80)
+    highlights = st.text_area("Highlights *", value="100% Pure - No Sugar Added\nEnergy Booster\nImmunity Support", height=100)
+    full_desc = st.text_area("Full Description *", value="MEHAR MART - Aapki Sehat Ka Sathi\nOrder Now: Cash on Delivery All Pakistan\nPure Beri Flowers Honey 500gm - 100% Pure & Natural", height=120)
+    specs = st.text_area("Specifications *", value="Weight: 500gm\nType: Beri Flowers Honey\nBest For: Manda, Khansi, Kamzori\nBrand: MEHAR MART\nExpiry: 2 Years", height=120)
     img_file = st.file_uploader("Photo", type=["jpg","png","jpeg"])
     if st.button("💾 SAVE PRODUCT", use_container_width=True, type="primary"):
         if name:
-            img_b64 = base64.b64encode(img_file.getvalue()).decode() if img_file else None
+            img_b64 = None
+            if img_file:
+                try:
+                    img = Image.open(img_file)
+                    img.thumbnail((600, 600))
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG", quality=70)
+                    img_b64 = base64.b64encode(buf.getvalue()).decode()
+                except: img_b64 = None
             exp = datetime.now() + timedelta(days=180)
             new_prod = {"name":name,"category":category,"sell":bechna,"kharid":kharid,"discount":discount,"final":customer_pay,"buy":kharid,"stock":stock,"expiry":exp.strftime("%Y-%m-%d"),"profit":profit,"highlights":highlights,"full_desc":full_desc,"specs":specs,"image_b64":img_b64}
             st.session_state.products.append(new_prod)
             save_json(PRODUCT_FILE, st.session_state.products)
-            st.success(f"{name} Save! Category: {category}")
+            st.success(f"✅ {name} Save!")
             st.balloons()
+    st.divider()
+    if st.session_state.products:
+        st.subheader(f"Saved Products ({len(st.session_state.products)})")
+        for idx, p in enumerate(st.session_state.products):
+            with st.container(border=True):
+                st.markdown(f"**{p['name']}** - {p['category']} - Rs.{p['final']}")
+                st.write(f"Highlights: {p.get('highlights','')[:100]}")
+                st.write(f"Desc: {p.get('full_desc','')[:100]}")
+                if st.button(f"Delete {p['name']}", key=f"del_prod_{idx}"):
+                    st.session_state.products.pop(idx)
+                    save_json(PRODUCT_FILE, st.session_state.products)
+                    st.rerun()
 
 elif menu == "6. DARAZ STORE":
-    st.header("MEHAR MART STORE - MULTI CATEGORY + DELIVERY")
+    st.header("MEHAR MART STORE - DESCRIPTION SHOW")
     if st.session_state.products:
         filter_cat = st.selectbox("🔍 Category Filter", ["ALL"] + st.session_state.categories)
     else: filter_cat = "ALL"
     
-    # ★★★ DELIVERY WALA BOX - 10 OPTION - CUSTOMER KE LIYE ★★★
     if len(st.session_state.cart) > 0:
         st.divider()
-        st.subheader("🚚 Delivery City Select Karo (10 Options)")
-        delivery_choice = st.selectbox("📦 Delivery City * (10 Cities)", list(DELIVERY_OPTIONS.keys()), index=0, key="delivery_select")
-        st.session_state.delivery_city = delivery_choice
+        st.subheader("🚚 Delivery City (10 Options)")
+        delivery_choice = st.selectbox("📦 Delivery City *", list(DELIVERY_OPTIONS.keys()), index=0)
         delivery_charge = DELIVERY_OPTIONS[delivery_choice]
-        st.info(f"Selected: {delivery_choice} - Charge Rs.{delivery_charge}")
-        
         total_bill = sum([i['final'] for i in st.session_state.cart])
         final_total = total_bill + delivery_charge
-        
-        st.error(f"🛒 CART {len(st.session_state.cart)} items = Rs.{total_bill} + Delivery Rs.{delivery_charge} = TOTAL Rs.{final_total}")
-        
+        st.error(f"🛒 CART {len(st.session_state.cart)} = Rs.{total_bill} + Delivery Rs.{delivery_charge} = TOTAL Rs.{final_total}")
         for i,item in enumerate(st.session_state.cart):
             ca,cb = st.columns([3,1])
-            with ca: st.write(f"{item['name']} ({item['category']}) - Rs.{item['final']}")
+            with ca: st.write(f"{item['name']} - Rs.{item['final']}")
             with cb:
                 if st.button("X", key=f"r{i}"): st.session_state.cart.pop(i); st.rerun()
-        
-        # WhatsApp message with delivery
-        cart_txt = "Salam MEHAR MART! Mera Order:\n"
-        for x in st.session_state.cart:
-            cart_txt += f"{x['name']} ({x['category']}) Rs.{x['final']}\n"
-        cart_txt += f"Subtotal Rs.{total_bill}\nDelivery: {delivery_choice}\nTotal Rs.{final_total}\n{STORE_LINK}"
-        
-        st.link_button(f"✅ WHATSAPP ORDER Rs.{final_total} (Delivery ke sath)", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(cart_txt)}", type="primary", use_container_width=True)
-        if st.button("Cart Khali Karo", use_container_width=True): st.session_state.cart=[]; st.rerun()
+        cart_txt = "Salam MEHAR MART! Order:\n" + "\n".join([f"{x['name']} Rs.{x['final']}" for x in st.session_state.cart]) + f"\nSubtotal Rs.{total_bill}\nDelivery: {delivery_choice}\nTotal Rs.{final_total}\n{STORE_LINK}"
+        st.link_button(f"✅ WHATSAPP ORDER Rs.{final_total}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(cart_txt)}", type="primary", use_container_width=True)
+        if st.button("Khali Karo", use_container_width=True): st.session_state.cart=[]; st.rerun()
         st.divider()
     
     if not st.session_state.products:
-        st.warning("No products - 1. PRODUCT SYSTEM me add karo")
+        st.warning("No products")
     else:
         products_to_show = st.session_state.products if filter_cat=="ALL" else [p for p in st.session_state.products if p['category']==filter_cat]
         st.success(f"{len(products_to_show)} Products - {filter_cat}")
@@ -221,24 +217,35 @@ elif menu == "6. DARAZ STORE":
                 if p.get('image_b64'):
                     try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
                     except: pass
-                st.markdown(f"**{p['name']}**")
-                st.caption(f"🏷️ {p['category']} | Rs.{p['final']} ({p['discount']}% OFF)")
+                
+                # ★★★ DESCRIPTION SHOW FIX - AB FULL DIKHEGA ★★★
+                st.markdown(f"### {p['name']}")
+                st.markdown(f"🏷️ **{p['category']}** | ~~Rs.{p['sell']}~~ **Rs.{p['final']}** ({p['discount']}% OFF) | Profit Rs.{p.get('profit',0)}")
+                
+                # HIGHLIGHTS
+                if p.get('highlights'):
+                    st.markdown("**✅ Highlights:**")
+                    st.info(p['highlights'])
+                
+                # FULL DESCRIPTION
+                if p.get('full_desc'):
+                    st.markdown("**📝 Description:**")
+                    st.success(p['full_desc'])
+                
+                # SPECIFICATIONS
+                if p.get('specs'):
+                    with st.expander("📋 Specifications - Click to View"):
+                        st.write(p['specs'])
+                
+                st.divider()
                 if st.button(f"🛒 ADD TO CART - Rs.{p['final']}", key=f"add{idx}", use_container_width=True, type="primary"):
-                    st.session_state.cart.append(p); st.rerun()
-                wa = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(f"Salam! {p['name']} Rs.{p['final']} - {STORE_LINK}")}"
-                st.link_button("💬 BUY NOW", wa, use_container_width=True)
+                    st.session_state.cart.append(p); st.toast("Add Ho Gaya!"); st.rerun()
+                wa = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(f"Salam! {p['name']} Rs.{p['final']}\nCategory: {p['category']}\n{p.get('highlights','')}\n{STORE_LINK}")}"
+                st.link_button("💬 BUY NOW WHATSAPP", wa, use_container_width=True)
 
 elif menu == "2. STOCK & EXPIRY":
     st.header("2. STOCK & EXPIRY")
-    for p in st.session_state.products:
-        col1,col2 = st.columns([4,1])
-        with col1: st.write(f"{p['name']} | {p['category']} | Stock {p['stock']}")
-        with col2:
-            if st.button("Delete", key=f"del_{p['name']}"):
-                st.session_state.products = [x for x in st.session_state.products if x['name']!=p['name']]
-                save_json(PRODUCT_FILE, st.session_state.products)
-                st.rerun()
-        st.divider()
+    for p in st.session_state.products: st.write(f"{p['name']} | {p['category']} | Stock {p['stock']}"); st.divider()
 elif menu == "3. SALES & ORDERS":
     st.header("3. SALES & ORDERS")
     if st.session_state.sales: st.dataframe(pd.DataFrame(st.session_state.sales), use_container_width=True)
@@ -249,13 +256,9 @@ elif menu == "5. CLIENT SYSTEM":
     st.header("5. CLIENT SYSTEM")
     if st.session_state.clients: st.dataframe(pd.DataFrame(st.session_state.clients), use_container_width=True)
 elif menu == "7. ORDERS TRACKING":
-    st.header("7. ORDERS TRACKING + DELIVERY REPORT")
+    st.header("7. ORDERS TRACKING")
     c1,c2 = st.columns(2)
     with c1: st.metric("Visits", total_visits)
     with c2: st.metric("Orders", len(st.session_state.orders))
-    st.divider()
-    st.subheader("🚚 Delivery Charges (10 Cities)")
-    df_del = pd.DataFrame(list(DELIVERY_OPTIONS.items()), columns=["City","Charge"])
-    st.dataframe(df_del, use_container_width=True)
-    st.write(f"Total Products: {len(st.session_state.products)}")
-    st.write(f"Categories: {', '.join(st.session_state.categories)}")
+    st.metric("Saved Products", len(st.session_state.products))
+    st.dataframe(pd.DataFrame(list(DELIVERY_OPTIONS.items()), columns=["City","Charge"]), use_container_width=True)
