@@ -1,4 +1,4 @@
-# MEHAR MART V85 - DARAZ CATEGORY DROPDOWN - SINGLE HONEY CATEGORY + DARAZ CATEGORIES
+# MEHAR MART V86 - CLEAN CLIENT - NO EXTRA TEXT - NO DARAZ WORD ON CLIENT SIDE
 import streamlit as st, os, urllib.parse, json
 from datetime import datetime, timedelta
 from PIL import Image
@@ -25,13 +25,11 @@ def load_json(file, default):
 def save_json(file,data):
     with open(file,"w") as f: json.dump(data,f)
 
-# DARAZ STYLE CATEGORIES - SINGLE HONEY - NO MORE PURE/BERI/SIDR ALAG
 NEW_DARAZ_CATEGORIES = ["HONEY","HOME & DECOR","KITCHEN GADGETS","HEALTH CARE & BEAUTY","SKIN CARE PRODUCTS","OTHER"]
 
 if 'products' not in st.session_state: st.session_state.products=load_json(PRODUCT_FILE, [])
 if 'cart' not in st.session_state: st.session_state.cart=[]
 if 'categories' not in st.session_state: 
-    # Force new Daraz categories
     st.session_state.categories=NEW_DARAZ_CATEGORIES
     save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
 if 'is_admin' not in st.session_state: st.session_state.is_admin=False
@@ -41,7 +39,6 @@ if 'selected_product' not in st.session_state: st.session_state.selected_product
 if 'orders' not in st.session_state: st.session_state.orders=load_json(ORDERS_FILE, [])
 if 'selected_category' not in st.session_state: st.session_state.selected_category="All"
 
-# AUTO FIX OLD PRODUCTS - PURE HONEY, BERI HONEY, SIDR HONEY SAB KO HONEY BANAO
 def fix_old_categories():
     prods = load_json(PRODUCT_FILE, [])
     changed = False
@@ -109,18 +106,18 @@ def get_whatsapp_msg(order_id, products_list, total=None):
     return msg
 
 if st.session_state.is_admin:
-    st.markdown("### ADMIN PANEL - DARAZ CATEGORY SYSTEM")
-    menu = st.selectbox("Menu", ["STORE VIEW","ORDERS - DARAZ","PRODUCT SYSTEM","MONEY","STOCK","SETTINGS"], index=0)
+    st.markdown("### ADMIN PANEL")
+    menu = st.selectbox("Menu", ["STORE VIEW","ORDERS","PRODUCT SYSTEM","MONEY","STOCK","SETTINGS"], index=0)
     st.session_state.admin_menu=menu
     orders_data=load_json(ORDERS_FILE, [])
     pending=len([o for o in orders_data if o['status']=="Pending"])
     confirmed=len([o for o in orders_data if o['status'] in ["Confirmed","Delivered"]])
     c1,c2=st.columns(2)
-    with c1: st.button(f"⏳ Pending: {pending}", use_container_width=True)
-    with c2: st.button(f"✅ Sale After Confirm: {confirmed}", use_container_width=True)
+    with c1: st.button(f"Pending: {pending}", use_container_width=True)
+    with c2: st.button(f"Sale: {confirmed}", use_container_width=True)
     col1,col2,col3=st.columns(3)
     with col1:
-        if st.button("ORDERS", use_container_width=True, type="primary"): st.session_state.admin_menu="ORDERS - DARAZ"; st.rerun()
+        if st.button("ORDERS", use_container_width=True, type="primary"): st.session_state.admin_menu="ORDERS"; st.rerun()
     with col2:
         if st.button("ADD PRODUCT", use_container_width=True): st.session_state.admin_menu="PRODUCT SYSTEM"; st.rerun()
     with col3:
@@ -130,20 +127,18 @@ else:
     menu="STORE VIEW"
 
 if menu=="PRODUCT SYSTEM":
-    st.subheader("Add Product - Daraz Category Dropdown")
-    # FORCE NEW CATEGORIES - OVERRIDE OLD FILE
+    st.subheader("Add Product")
     st.session_state.categories = NEW_DARAZ_CATEGORIES
     save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
-    st.info("New Daraz Categories: HONEY (Single - No More Pure/Beri Alag), HOME & DECOR, KITCHEN GADGETS, HEALTH CARE & BEAUTY, SKIN CARE PRODUCTS")
-    category=st.selectbox("Category Select Karo - Dropdown", st.session_state.categories, index=0)
-    new_cat=st.text_input("New Category Add Karo (Agar Chahiye)")
+    category=st.selectbox("Category", st.session_state.categories, index=0)
+    new_cat=st.text_input("New Category Add")
     if st.button("Add New Category"):
         if new_cat and new_cat.upper() not in st.session_state.categories:
             st.session_state.categories.append(new_cat.upper()); save_json(CAT_FILE, st.session_state.categories); st.success(f"Category {new_cat.upper()} Added!"); st.rerun()
     name=st.text_input("Product Name *")
     ca,cb=st.columns(2)
     with ca: kharid=st.number_input("Kharid Rate", 0, 100000, 2000)
-    with cb: bechna=st.number_input("Bechne Rate (Original)", 0, 100000, 3500)
+    with cb: bechna=st.number_input("Bechne Rate", 0, 100000, 3500)
     cc,cd=st.columns(2)
     with cc: discount=st.number_input("Discount %", 0, 90, 15)
     with cd: stock=st.number_input("Stock", 0, 10000, 10)
@@ -163,25 +158,25 @@ if menu=="PRODUCT SYSTEM":
                 try: img=Image.open(img_file); img.thumbnail((800,800)); buf=io.BytesIO(); img.save(buf, format="JPEG", quality=80); img_b64=base64.b64encode(buf.getvalue()).decode()
                 except: pass
             prod={"name":name,"category":category,"sell":bechna,"kharid":kharid,"discount":discount,"final":pay,"buy":kharid,"stock":stock,"expiry":expiry.strftime("%Y-%m-%d"),"profit":profit,"highlights":highlights,"full_desc":full_desc,"specs":specs,"image_b64":img_b64}
-            st.session_state.products.append(prod); save_json(PRODUCT_FILE, st.session_state.products); st.success(f"Saved in {category} - Daraz Style!")
+            st.session_state.products.append(prod); save_json(PRODUCT_FILE, st.session_state.products); st.success(f"Saved in {category}!")
     st.divider()
-    st.write("**Current Daraz Categories:** " + " | ".join(st.session_state.categories))
+    st.write("Categories: " + " | ".join(st.session_state.categories))
     for idx,p in enumerate(st.session_state.products):
         c1,c2=st.columns([4,1])
         with c1: st.write(f"{idx+1}. {p['name']} - {p.get('category','')} - Rs.{p['final']}")
         with c2:
             if st.button("Delete", key=f"del_{idx}"): st.session_state.products.pop(idx); save_json(PRODUCT_FILE, st.session_state.products); st.rerun()
 
-elif menu=="ORDERS - DARAZ":
-    st.header("ORDERS - DARAZ SYSTEM")
+elif menu=="ORDERS":
+    st.header("Orders")
     orders=load_json(ORDERS_FILE, [])
     if not orders: st.info("No orders")
     else:
         filter_status=st.selectbox("Filter", ["All","Pending","Confirmed","Delivered","Cancelled","Returned"], index=0)
         filtered=orders if filter_status=="All" else [o for o in orders if o['status']==filter_status]
         confirmed_orders=[o for o in orders if o['status'] in ["Confirmed","Delivered"]]
-        st.metric("✅ Sale Count After Confirm", len(confirmed_orders))
-        st.metric("💰 Sale Amount After Confirm", f"Rs.{sum([o['total'] for o in confirmed_orders])}")
+        st.metric("Sale Count", len(confirmed_orders))
+        st.metric("Sale Amount", f"Rs.{sum([o['total'] for o in confirmed_orders])}")
         st.divider()
         for o in reversed(filtered):
             real_index = orders.index(o)
@@ -191,18 +186,18 @@ elif menu=="ORDERS - DARAZ":
                 if o.get('reason'): st.warning(f"Reason: {o['reason']}")
                 c1,c2,c3,c4=st.columns(4)
                 with c1:
-                    if st.button("✅ Confirm", key=f"conf_{real_index}"): orders[real_index]['status']="Confirmed"; save_json(ORDERS_FILE, orders); st.rerun()
+                    if st.button("Confirm", key=f"conf_{real_index}"): orders[real_index]['status']="Confirmed"; save_json(ORDERS_FILE, orders); st.rerun()
                 with c2:
-                    if st.button("📦 Delivered", key=f"deliv_{real_index}"): orders[real_index]['status']="Delivered"; save_json(ORDERS_FILE, orders); st.rerun()
+                    if st.button("Delivered", key=f"deliv_{real_index}"): orders[real_index]['status']="Delivered"; save_json(ORDERS_FILE, orders); st.rerun()
                 with c3:
-                    if st.button("❌ Cancel", key=f"cancel_{real_index}"): orders[real_index]['status']="Cancelled"; save_json(ORDERS_FILE, orders); st.rerun()
+                    if st.button("Cancel", key=f"cancel_{real_index}"): orders[real_index]['status']="Cancelled"; save_json(ORDERS_FILE, orders); st.rerun()
                 with c4:
-                    if st.button("↩️ Return", key=f"return_{real_index}"): orders[real_index]['status']="Returned"; save_json(ORDERS_FILE, orders); st.rerun()
+                    if st.button("Return", key=f"return_{real_index}"): orders[real_index]['status']="Returned"; save_json(ORDERS_FILE, orders); st.rerun()
 
 elif menu=="MONEY":
     orders=load_json(ORDERS_FILE, [])
     confirmed=[o for o in orders if o['status'] in ["Confirmed","Delivered"]]
-    st.metric("Sale Count After Confirm", len(confirmed))
+    st.metric("Sale Count", len(confirmed))
     st.metric("Sale Amount", f"Rs.{sum([o['total'] for o in confirmed])}")
 
 elif menu=="STOCK":
@@ -212,11 +207,11 @@ elif menu=="STOCK":
 
 elif menu=="SETTINGS":
     st.subheader("Fix Categories")
-    if st.button("FIX ALL OLD CATEGORIES TO NEW DARAZ SYSTEM - HONEY SINGLE", type="primary"):
+    if st.button("FIX OLD CATEGORIES TO NEW SYSTEM", type="primary"):
         fix_old_categories()
         st.session_state.categories = NEW_DARAZ_CATEGORIES
         save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
-        st.success("Fixed! All PURE HONEY, BERI HONEY, SIDR HONEY -> HONEY. New Daraz Categories Applied!")
+        st.success("Fixed! All old categories -> New system")
         st.rerun()
     st.divider()
     st.subheader("Logo")
@@ -249,7 +244,7 @@ else:
     st.markdown(f"""
     <div style="background:#f85606; padding:10px 15px; margin:-1rem -1rem 0 -1rem; display:flex; justify-content:space-between; align-items:center;">
     <div style="display:flex; align-items:center; color:white; font-size:18px; font-weight:bold;">{logo_html}MEHAR MART</div>
-    <div style="background:white; color:#f85606; padding:5px 12px; border-radius:20px; font-size:13px; font-weight:bold;">🛒 {cart_count} | {st.session_state.selected_category}</div>
+    <div style="background:white; color:#f85606; padding:5px 12px; border-radius:20px; font-size:13px; font-weight:bold;">🛒 {cart_count}</div>
     </div>
     """, unsafe_allow_html=True)
     st.write("")
@@ -258,8 +253,8 @@ else:
     st.markdown(f"""
     <script>
     try {{
-        localStorage.setItem('mehar_cart_v85', `{cart_json}`);
-        localStorage.setItem('mehar_cart_time_v85', new Date().toISOString());
+        localStorage.setItem('mehar_cart_v86', `{cart_json}`);
+        localStorage.setItem('mehar_cart_time_v86', new Date().toISOString());
         localStorage.setItem('mehar_cart_expiry', new Date(Date.now() + 30*24*60*60*1000).toISOString());
     }} catch(e) {{}}
     </script>
@@ -269,13 +264,13 @@ else:
         idx = st.session_state.selected_product
         if idx < len(st.session_state.products):
             p = st.session_state.products[idx]
-            if st.button("⬅ Back to Store", use_container_width=True):
+            if st.button("⬅ Back", use_container_width=True):
                 st.session_state.selected_product=None; st.rerun()
             if p.get('image_b64'):
                 try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
                 except: pass
             st.write(f"### {p['name']}")
-            st.caption(f"Category: {p.get('category','')}")
+            st.caption(f"{p.get('category','')}")
             st.markdown(f"""
             <div style="background:#fff9f0; padding:12px; border-radius:8px;">
             <div style="font-size:28px; font-weight:bold; color:#f85606;">Rs. {p['final']}</div>
@@ -286,18 +281,18 @@ else:
             c1,c2=st.columns(2)
             with c1:
                 if st.button("Add to Cart", type="primary", use_container_width=True, key="detail_add"):
-                    logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added to Cart - 1 MONTH tak save!"); st.rerun()
+                    logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added to Cart"); st.rerun()
             with c2:
-                if st.button("Buy Now - Place Order", type="primary", use_container_width=True, key="detail_buy"):
+                if st.button("Buy Now", type="primary", use_container_width=True, key="detail_buy"):
                     oid=create_order([p], p['final'])
                     whatsapp_msg = get_whatsapp_msg(oid, [p])
-                    st.success(f"Order {oid} Placed! Pending")
+                    st.success(f"Order {oid} Placed")
                     st.link_button(f"WhatsApp Confirm {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
             st.divider()
             st.subheader("Highlights")
             st.write(p.get('highlights',''))
             st.divider()
-            st.subheader("Full Description")
+            st.subheader("Description")
             st.write(p.get('full_desc',''))
             st.divider()
             st.subheader("Specifications")
@@ -307,37 +302,33 @@ else:
         else:
             st.session_state.selected_product=None; st.rerun()
     else:
-        # DARAZ STYLE CATEGORY DROPDOWN - NOT BUTTONS - DROPDOWN
-        st.write("**Select Category - Daraz Style Dropdown:**")
-        # Dropdown for category filter - Daraz jaisa
+        # CLEAN DROPDOWN - NO EXTRA TEXT - JUST SELECT CATEGORY
+        st.write("Select Category:")
         category_options = ["All"] + NEW_DARAZ_CATEGORIES
-        selected_from_dropdown = st.selectbox("Category Filter - Dropdown", category_options, index=category_options.index(st.session_state.selected_category) if st.session_state.selected_category in category_options else 0, label_visibility="collapsed")
+        selected_from_dropdown = st.selectbox("Category", category_options, index=category_options.index(st.session_state.selected_category) if st.session_state.selected_category in category_options else 0, label_visibility="collapsed")
         if selected_from_dropdown != st.session_state.selected_category:
             st.session_state.selected_category = selected_from_dropdown
             st.rerun()
         
-        search=st.text_input("", placeholder="Search in Mehar Mart... (Name se search)", label_visibility="collapsed")
+        search=st.text_input("", placeholder="Search products...", label_visibility="collapsed")
         
         if cart_count>0:
             with st.container(border=True):
-                st.subheader(f"🛒 Your Cart - {cart_count} Products (1 MONTH Save)")
+                st.subheader(f"Cart - {cart_count} Products")
                 for i,item in enumerate(st.session_state.cart):
                     ca,cb=st.columns([3,1])
-                    with ca: st.write(f"**{item['name']}** - Rs.{item['final']} - {item.get('category','')}")
+                    with ca: st.write(f"**{item['name']}** - Rs.{item['final']}")
                     with cb:
                         if st.button("X", key=f"rem_{i}"): st.session_state.cart.pop(i); st.rerun()
                 st.divider()
                 st.write(f"**Total: Rs.{cart_total}**")
-                if st.button(f"Checkout Rs.{cart_total} - Place Order", type="primary", use_container_width=True):
+                if st.button(f"Checkout Rs.{cart_total}", type="primary", use_container_width=True):
                     oid=create_order(st.session_state.cart, cart_total)
                     whatsapp_msg = get_whatsapp_msg(oid, st.session_state.cart, cart_total)
-                    st.success(f"Order {oid} Placed! Pending")
+                    st.success(f"Order {oid} Placed")
                     st.link_button(f"WhatsApp Confirm Order {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
                 if st.button("Clear Cart", use_container_width=True):
                     st.session_state.cart=[]; st.rerun()
-        
-        if cart_count==0:
-            st.info("💡 Cart 1 MONTH (30 Din) tak save rahega!")
         
         prods=st.session_state.products
         if st.session_state.selected_category != "All":
@@ -346,12 +337,11 @@ else:
         if search.strip(): 
             prods=[p for p in prods if search.lower() in p['name'].lower() or search.lower() in p.get('category','').lower()]
         
-        st.write(f"**Showing {len(prods)} Products in {st.session_state.selected_category}**")
-        st.caption(f"Total Products in Store: {len(st.session_state.products)}")
+        st.write(f"{len(prods)} Products")
         
         if len(prods)==0:
-            st.error(f"No Products in {st.session_state.selected_category}")
-            if st.button("🔄 SHOW ALL PRODUCTS", type="primary", use_container_width=True):
+            st.info(f"No Products in {st.session_state.selected_category}")
+            if st.button("Show All Products", type="primary", use_container_width=True):
                 st.session_state.selected_category="All"; st.rerun()
         
         for idx, p in enumerate(prods):
@@ -364,7 +354,7 @@ else:
                     try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
                     except: pass
                 st.write(f"**{p['name']}**")
-                st.caption(f"Category: {p.get('category','')}")
+                st.caption(f"{p.get('category','')}")
                 st.markdown(f"""
                 <div style="margin:8px 0;">
                 <div style="font-size:20px; font-weight:bold; color:#f85606;">Rs. {p['final']}</div>
@@ -377,10 +367,10 @@ else:
                         st.session_state.selected_product=real_idx; st.rerun()
                 with c2:
                     if st.button("Add to Cart", key=f"add_{real_idx}_{idx}", use_container_width=True, type="primary"):
-                        logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added! 1 MONTH tak save!"); st.rerun()
+                        logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added!"); st.rerun()
                 if st.button(f"Buy Now Rs.{p['final']}", key=f"buy_{real_idx}_{idx}", use_container_width=True):
                     oid=create_order([p], p['final'])
                     whatsapp_msg = get_whatsapp_msg(oid, [p])
-                    st.success(f"Order {oid} Placed! Pending")
+                    st.success(f"Order {oid} Placed")
                     st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
         st.markdown("<div style='height:150px;'></div>", unsafe_allow_html=True)
