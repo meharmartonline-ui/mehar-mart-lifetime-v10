@@ -1,4 +1,4 @@
-I'm# MEHAR MART V96 FINAL - NO GEMINI API NEEDED - SMART AI - PART 1/2
+# MEHAR MART V96 FINAL - NO GEMINI API NEEDED - SMART AI - PART 1/2
 import streamlit as st, urllib.parse, json, os
 from datetime import datetime, timedelta
 from PIL import Image
