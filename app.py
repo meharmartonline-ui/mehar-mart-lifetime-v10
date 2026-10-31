@@ -1,164 +1,241 @@
-import streamlit as st
-import io
-import base64
-import urllib.parse
+# MEHAR MART V94 - FINAL - V93 + AI AGENT - NO DUMMY - LIFETIME
+import streamlit as st, os, urllib.parse, json
+from datetime import datetime, timedelta
 from PIL import Image
+import io, base64
 import google.generativeai as genai
-from datetime import datetime
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Mehar Mart - Lifetime", page_icon="🛒", layout="wide")
+st.set_page_config(page_title="Mehar Mart", layout="wide", initial_sidebar_state="collapsed")
 
-# --- SESSION INIT - NO DUMMY DATA ---
-if "products" not in st.session_state:
-    st.session_state.products = []  # Bilkul Khali - Koi Watch, AirPods Nahi!
-if "cart" not in st.session_state:
-    st.session_state.cart = []
-if "orders" not in st.session_state:
-    st.session_state.orders = []
-if "selected_category" not in st.session_state:
-    st.session_state.selected_category = "All"
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [{"role": "assistant", "content": "Salam Bhai! Mehar Mart Me Khush Amdeed! Aapko Kya Chahiye?"}]
+WA_NUMBER = "923452352112"
+PRODUCT_FILE = "products.json"
+PASS_FILE = "admin_password.txt"
+CAT_FILE = "categories.json"
+LOGO_FILE = "logo.json"
+ORDERS_FILE = "orders.json"
+BACKUP_FILE = "products_backup.json"
+ORDERS_BACKUP = "orders_backup.json"
 
-# --- HELPER ---
-def create_order(items, total):
-    oid = f"MM-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    st.session_state.orders.append({"id": oid, "items": items, "total": total, "date": str(datetime.now())})
-    return oid
+def load_json(file, default):
+    if os.path.exists(file):
+        try:
+            with open(file,"r") as f:
+                data=json.load(f)
+                if data: return data
+        except: pass
+    if file==PRODUCT_FILE and os.path.exists(BACKUP_FILE):
+        try:
+            with open(BACKUP_FILE,"r") as f:
+                data=json.load(f)
+                if data: return data
+        except: pass
+    if file==ORDERS_FILE and os.path.exists(ORDERS_BACKUP):
+        try:
+            with open(ORDERS_BACKUP,"r") as f:
+                data=json.load(f)
+                if data: return data
+        except: pass
+    return default
 
-# --- HEADER ---
-st.title("🛒 Mehar Mart - Lifetime Store")
-st.caption("Owner WhatsApp: 03452352112 | 100% Original Products")
+def save_json(file,data):
+    try:
+        with open(file,"w") as f: json.dump(data,f)
+        if file==PRODUCT_FILE:
+            with open(BACKUP_FILE,"w") as bf: json.dump(data,bf)
+        if file==ORDERS_FILE:
+            with open(ORDERS_BACKUP,"w") as bf: json.dump(data,bf)
+    except: pass
 
-# --- ADMIN PANEL (Aap Ke Liye) ---
-with st.expander("🔐 Admin Panel - Product Add Karo (Sirf Aap Ke Liye)"):
-    with st.form("add_product_form"):
+NEW_CATS = ["HONEY","HOME & DECOR","KITCHEN GADGETS","HEALTH CARE & BEAUTY","SKIN CARE PRODUCTS","OTHER"]
+
+if 'products' not in st.session_state: st.session_state.products=load_json(PRODUCT_FILE, [])
+if 'cart' not in st.session_state: st.session_state.cart=[]
+if 'categories' not in st.session_state: 
+    st.session_state.categories=NEW_CATS
+    save_json(CAT_FILE, NEW_CATS)
+if 'is_admin' not in st.session_state: st.session_state.is_admin=False
+if 'logo_b64' not in st.session_state: st.session_state.logo_b64=load_json(LOGO_FILE, None)
+if 'selected_product' not in st.session_state: st.session_state.selected_product=None
+if 'orders' not in st.session_state: st.session_state.orders=load_json(ORDERS_FILE, [])
+if 'selected_category' not in st.session_state: st.session_state.selected_category="All"
+if 'chat_history' not in st.session_state: st.session_state.chat_history=[{"role":"assistant","content":"Salam Bhai! Mehar Mart Me Khush Amdeed! Aapko Kya Chahiye?"}]
+
+def fix_old_categories():
+    try:
+        prods = load_json(PRODUCT_FILE, [])
+        changed=False
+        for p in prods:
+            if not isinstance(p, dict): continue
+            cat_raw = p.get('category','')
+            if cat_raw is None: cat_raw=""
+            cat=str(cat_raw).upper().strip()
+            if cat in ['PURE HONEY','BERI HONEY','SIDR HONEY','PURE','BERI','SIDR'] or 'PURE HONEY' in cat or 'BERI HONEY' in cat:
+                if p.get('category')!="HONEY":
+                    p['category']="HONEY"; changed=True
+        if changed:
+            save_json(PRODUCT_FILE, prods)
+            st.session_state.products=prods
+    except: pass
+
+fix_old_categories()
+
+def get_password():
+    if os.path.exists(PASS_FILE):
+        try:
+            with open(PASS_FILE,"r") as f: return f.read().strip()
+        except: return "mehar123"
+    return "mehar123"
+
+def save_password(p):
+    try:
+        with open(PASS_FILE,"w") as f: f.write(p)
+    except: pass
+
+if st.query_params.get("admin")==get_password():
+    st.session_state.is_admin=True
+    st.session_state.selected_category="All"
+
+if not st.session_state.is_admin:
+    st.markdown("<style>header, footer {visibility: hidden;} .block-container{padding-top:0rem;} [data-testid='stToolbar']{display:none;} [data-testid='stAppDeployButton']{display:none;}</style>", unsafe_allow_html=True)
+else:
+    st.markdown("<style>footer {visibility: hidden;} [data-testid='stToolbar']{display:none;} [data-testid='stAppDeployButton']{display:none;}</style>", unsafe_allow_html=True)
+
+def create_order(products_list, total):
+    orders=load_json(ORDERS_FILE, [])
+    order_id = datetime.now().strftime("%Y%m%d%H%M%S") + str(len(orders)+1)
+    new_order={"id": order_id,"time": datetime.now().strftime("%Y-%m-%d %H:%M"),"products": [{"name": p.get('name',''), "price": p.get('final', p.get('price',0)), "category": p.get('category','')} for p in products_list],"total": total,"status": "Pending","reason": ""}
+    orders.append(new_order); save_json(ORDERS_FILE, orders); st.session_state.orders=orders; return order_id
+
+def get_whatsapp_msg(order_id, products_list, total=None):
+    msg = f"Asalam O Alaikum\nMehar Mart Order Krna Hy\n\nOrder ID: {order_id}\n\n"
+    for p in products_list:
+        msg+=f"Product: {p.get('name','')}\nCategory: {p.get('category','')}\nPrice: Rs.{p.get('final', p.get('price',0))}\n\n"
+    if total and len(products_list)>1: msg+=f"Total: Rs.{total}\n\n"
+    msg+="Please Confirm My Order - Shukria"
+    return msg
+
+# --- MENU ---
+current_menu = "STORE VIEW"
+if st.session_state.is_admin:
+    st.markdown("### ADMIN PANEL - Mehar Mart")
+    current_menu = st.selectbox("Menu", ["STORE VIEW", "MANAGE PRODUCTS", "ORDERS", "SETTINGS"])
+
+# --- MANAGE PRODUCTS (ONLY ADMIN) ---
+if current_menu == "MANAGE PRODUCTS" and st.session_state.is_admin:
+    st.header("Add / Delete Products")
+    with st.form("add_prod"):
         name = st.text_input("Product Name")
-        category = st.text_input("Category", value="General")
-        price = st.number_input("Price Rs.", min_value=0)
+        cat = st.selectbox("Category", st.session_state.categories)
+        price = st.number_input("Price", min_value=0)
+        final_price = st.number_input("Final Price (Discount)", min_value=0)
         desc = st.text_area("Description")
-        img_file = st.file_uploader("Product Image", type=["jpg","png","jpeg"])
-        submit = st.form_submit_button("Add Product")
-        if submit and name and price:
+        img = st.file_uploader("Image", type=["jpg","png","jpeg"])
+        if st.form_submit_button("Add Product"):
             img_b64 = ""
-            if img_file:
-                img = Image.open(img_file)
+            if img:
+                pil = Image.open(img)
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
+                pil.save(buf, format="PNG")
                 img_b64 = base64.b64encode(buf.getvalue()).decode()
-            st.session_state.products.append({"name": name, "category": category, "price": price, "desc": desc, "image_b64": img_b64})
-            st.success(f"{name} Add Ho Gaya!")
+            new_p = {"name": name, "category": cat, "price": price, "final": final_price if final_price>0 else price, "desc": desc, "image_b64": img_b64}
+            prods = load_json(PRODUCT_FILE, [])
+            prods.append(new_p)
+            save_json(PRODUCT_FILE, prods)
+            st.session_state.products = prods
+            st.success("Product Added!")
+    st.divider()
+    for i, p in enumerate(load_json(PRODUCT_FILE, [])):
+        st.write(f"{i+1}. {p.get('name')} - Rs.{p.get('final')}")
+        if st.button(f"Delete {p.get('name')}", key=f"del_{i}"):
+            prods = load_json(PRODUCT_FILE, [])
+            del prods[i]
+            save_json(PRODUCT_FILE, prods)
+            st.session_state.products = prods
+            st.rerun()
 
-# --- SEARCH & CATEGORY ---
-search = st.text_input("🔍 Search Product")
-categories = ["All"] + list(set([p.get('category','General') for p in st.session_state.products]))
-selected = st.selectbox("Category", categories, index=0)
-
-prods = st.session_state.products
-if selected != "All":
-    prods = [p for p in prods if p.get('category') == selected]
-if search.strip():
-    prods = [p for p in prods if search.lower() in p.get('name','').lower()]
-
-st.write(f"**{len(prods)} Products Found**")
-
-if len(prods) == 0:
-    st.info("No Products in Store - Admin Panel Se Add Karo. Customer ko bolo WhatsApp 03452352112 pe rabta kare.")
-    if st.button("Show All Products"):
-        st.session_state.selected_category = "All"
-        st.rerun()
-
-# --- PRODUCT DISPLAY ---
-for idx, p in enumerate(prods):
-    try:
-        real_idx = st.session_state.products.index(p)
-    except:
-        real_idx = idx
+# --- STORE VIEW ---
+if current_menu == "STORE VIEW":
+    st.markdown("<h1 style='text-align:center;'>🛒 Mehar Mart - Lifetime Store</h1>", unsafe_allow_html=True)
+    # Owner number HIDDEN from public - only in WhatsApp links
     
-    with st.container(border=True):
-        if p.get('image_b64'):
-            try:
-                img_data = base64.b64decode(p.get('image_b64'))
-                st.image(Image.open(io.BytesIO(img_data)), use_container_width=True)
-            except:
-                pass
-        
-        st.write(f"**{p.get('name','')}**")
-        st.caption(f"{p.get('category','')} | Rs. {p.get('price','')}")
-        st.markdown(f"<div style='margin-bottom:10px'>{p.get('desc','')}</div>", unsafe_allow_html=True)
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("View Details", key=f"view_{idx}"):
-                st.session_state.selected_product = p
-        with c2:
-            if st.button("Add to Cart", key=f"cart_{idx}"):
-                st.session_state.cart.append(p)
-                st.toast(f"{p.get('name')} Added!")
-        
-        if st.button(f"Buy Now Rs.{p.get('price','')}", key=f"buy_{idx}", use_container_width=True):
-            oid = create_order([p], p.get('price',''))
-            st.success(f"Order Created: {oid} - WhatsApp pe rabta karo!")
+    prods = load_json(PRODUCT_FILE, [])
+    st.session_state.products = prods
 
-        # --- WHATSAPP BUTTON - HAR PRODUCT PE ---
-        wa_text = f"Salam Mehar Mart! Mujhe {p.get('name','')} chahiye. Price Rs.{p.get('price','')} Order karna hai."
-        wa_encoded = urllib.parse.quote(wa_text)
-        wa_link = f"https://wa.me/923452352112?text={wa_encoded}"
-        st.link_button(f"📲 WhatsApp Pe Order - {p.get('name','')}", wa_link, use_container_width=True)
+    search = st.text_input("🔍 Search Product", placeholder="e.g. Honey, Kitchen...")
+    cats = ["All"] + st.session_state.categories
+    sel_cat = st.selectbox("Category", cats, index=0)
 
-st.markdown("<div style='height:100px;'></div>", unsafe_allow_html=True)
+    filtered = prods
+    if sel_cat != "All":
+        filtered = [p for p in filtered if p.get('category') == sel_cat]
+    if search.strip():
+        filtered = [p for p in filtered if search.lower() in p.get('name','').lower()]
 
-# ================================================
-# --- JARVIS AI AGENT - STORE PE HI - FINAL ---
-# ================================================
-st.divider()
-st.header("💬 Mehar Mart AI Agent - Jarvis")
-st.caption("Store pe hi sawal pucho - WhatsApp pe jane ki zaroorat nahi")
+    st.write(f"**{len(filtered)} Products Found**")
 
-for chat in st.session_state.chat_history:
-    st.chat_message(chat["role"]).write(chat["content"])
+    if len(filtered) == 0:
+        st.info("Filhal Products Load Ho Rahe Hain - Admin Se Rabta Karo: WhatsApp 03452352112")
+    
+    cols = st.columns(2)
+    for idx, p in enumerate(filtered):
+        col = cols[idx % 2]
+        with col:
+            with st.container(border=True):
+                if p.get('image_b64'):
+                    try:
+                        img_data = base64.b64decode(p.get('image_b64'))
+                        st.image(Image.open(io.BytesIO(img_data)), use_container_width=True)
+                    except: pass
+                st.markdown(f"**{p.get('name','')}**")
+                st.caption(f"{p.get('category','')} | Rs. {p.get('final', p.get('price',''))}")
+                if p.get('desc'):
+                    st.write(p.get('desc')[:100])
 
-if user_q := st.chat_input("Yahan likho: e.g. Sasti chez dikhao, Kapre hain?"):
-    st.session_state.chat_history.append({"role": "user", "content": user_q})
-    st.chat_message("user").write(user_q)
+                if st.button(f"Buy Now Rs.{p.get('final', p.get('price',''))}", key=f"buy_{idx}"):
+                    oid = create_order([p], p.get('final', p.get('price','')))
+                    msg = get_whatsapp_msg(oid, [p])
+                    wa_link = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(msg)}"
+                    st.success(f"Order ID: {oid}")
+                    st.link_button("📲 Confirm on WhatsApp", wa_link, use_container_width=True)
 
-    # Live Data - No Dummy
-    live_products = st.session_state.products
-    if not live_products:
-        prod_info = "STORE IS EMPTY. No products available right now."
-    else:
-        # Only send name, price, category to AI - not full base64
-        clean_list = [{"name": x.get('name'), "price": x.get('price'), "category": x.get('category')} for x in live_products]
-        prod_info = str(clean_list)
+                # WHATSAPP BUTTON PER PRODUCT
+                wa_text = f"Salam! Mehar Mart - Mujhe {p.get('name','')} chahiye. Price Rs.{p.get('final', p.get('price',''))}"
+                wa_link2 = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(wa_text)}"
+                st.link_button(f"📲 WhatsApp - {p.get('name','')[:20]}", wa_link2, use_container_width=True)
 
-    # Jarvis Reply Logic
-    try:
-        if "GEMINI_API_KEY" in st.secrets:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            system = f"""
-            You are Jarvis, AI Agent for Mehar Mart. Speak in Roman Urdu friendly style.
-            Owner WhatsApp: 03452352112
-            LIVE STORE DATA (Only Truth): {prod_info}
-            RULES:
-            1. NEVER mention dummy products like Watch, AirPods, Wallet, Headphones if not in LIVE DATA.
-            2. If STORE IS EMPTY, say: Bhai store khali hai, WhatsApp 03452352112 pe rabta karo.
-            3. If products exist, show them with price.
-            4. For order, ask Name + Address + Phone.
-            5. Be helpful, short.
-            """
-            resp = model.generate_content(system + f"\nCustomer: {user_q}\nJarvis:")
-            ans = resp.text
+    st.markdown("<div style='height:80px;'></div>", unsafe_allow_html=True)
+
+    # ================= AI AGENT - JARVIS - AT BOTTOM =================
+    st.divider()
+    st.header("💬 Mehar Mart AI Agent - Jarvis")
+    st.caption("Store pe hi sawal pucho - WhatsApp pe jane ki zaroorat nahi")
+
+    for chat in st.session_state.chat_history:
+        st.chat_message(chat["role"]).write(chat["content"])
+
+    if user_q := st.chat_input("Yahan likho: e.g. Sasti chez dikhao, Honey hai?"):
+        st.session_state.chat_history.append({"role": "user", "content": user_q})
+        st.chat_message("user").write(user_q)
+
+        live_prods = load_json(PRODUCT_FILE, [])
+        if not live_prods:
+            prod_info = "STORE EMPTY - No products in json"
         else:
-            ans = f"Live me {len(live_products)} products hain. WhatsApp 03452352112 pe rabta karo. Question: {user_q}"
-    except Exception as e:
-        ans = f"Mehar Mart me {len(live_products)} products available hain. Aapko kya chahiye? WhatsApp: 03452352112"
+            clean = [{"name": x.get('name'), "price": x.get('final', x.get('price')), "cat": x.get('category')} for x in live_prods]
+            prod_info = str(clean)[:3500]
 
-    st.session_state.chat_history.append({"role": "assistant", "content": ans})
-    st.chat_message("assistant").write(ans)
-    
-    # Quick WhatsApp Continue
-    wa_q = urllib.parse.quote(f"Salam! Mehar Mart - {user_q}")
-    wa_link_q = f"https://wa.me/923452352112?text={wa_q}"
-    st.link_button("📲 WhatsApp Pe Continue Karo", wa_link_q)
+        try:
+            if "GEMINI_API_KEY" in st.secrets:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                prompt = f"You are Jarvis for Mehar Mart. Roman Urdu. Live Products: {prod_info}. WA: {WA_NUMBER}. Rule: Never invent products. If empty, say WhatsApp pe rabta karo. Customer: {user_q}"
+                ans = model.generate_content(prompt).text
+            else:
+                ans = f"Mehar Mart me {len(live_prods)} products hain. Aapka sawal: {user_q} - WhatsApp 03452352112 pe rabta karo"
+        except Exception as e:
+            ans = f"Mehar Mart me {len(live_prods)} products hain. Aapko kya chahiye? WhatsApp: 03452352112"
+
+        st.session_state.chat_history.append({"role": "assistant", "content": ans})
+        st.chat_message("assistant").write(ans)
+        wa_q = urllib.parse.quote(f"Salam Mehar Mart! {user_q}")
+        st.link_button("📲 WhatsApp Pe Continue", f"https://wa.me/{WA_NUMBER}?text={wa_q}")
