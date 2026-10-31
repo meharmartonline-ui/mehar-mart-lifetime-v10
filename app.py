@@ -1,4 +1,4 @@
-# MEHAR MART V84 - WHATSAPP MESSAGE FIX - ASALAM O ALAIKUM MEHAR MART ORDER KRNA HY + ORDER ID + DETAILS
+# MEHAR MART V85 - DARAZ CATEGORY DROPDOWN - SINGLE HONEY CATEGORY + DARAZ CATEGORIES
 import streamlit as st, os, urllib.parse, json
 from datetime import datetime, timedelta
 from PIL import Image
@@ -25,15 +25,49 @@ def load_json(file, default):
 def save_json(file,data):
     with open(file,"w") as f: json.dump(data,f)
 
+# DARAZ STYLE CATEGORIES - SINGLE HONEY - NO MORE PURE/BERI/SIDR ALAG
+NEW_DARAZ_CATEGORIES = ["HONEY","HOME & DECOR","KITCHEN GADGETS","HEALTH CARE & BEAUTY","SKIN CARE PRODUCTS","OTHER"]
+
 if 'products' not in st.session_state: st.session_state.products=load_json(PRODUCT_FILE, [])
 if 'cart' not in st.session_state: st.session_state.cart=[]
-if 'categories' not in st.session_state: st.session_state.categories=load_json(CAT_FILE, ["PURE HONEY","SIDR HONEY","BERI HONEY","DESI GHEE","DRY FRUITS","DATES","SPICES","OTHER"])
+if 'categories' not in st.session_state: 
+    # Force new Daraz categories
+    st.session_state.categories=NEW_DARAZ_CATEGORIES
+    save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
 if 'is_admin' not in st.session_state: st.session_state.is_admin=False
 if 'admin_menu' not in st.session_state: st.session_state.admin_menu="STORE VIEW"
 if 'logo_b64' not in st.session_state: st.session_state.logo_b64=load_json(LOGO_FILE, None)
 if 'selected_product' not in st.session_state: st.session_state.selected_product=None
 if 'orders' not in st.session_state: st.session_state.orders=load_json(ORDERS_FILE, [])
 if 'selected_category' not in st.session_state: st.session_state.selected_category="All"
+
+# AUTO FIX OLD PRODUCTS - PURE HONEY, BERI HONEY, SIDR HONEY SAB KO HONEY BANAO
+def fix_old_categories():
+    prods = load_json(PRODUCT_FILE, [])
+    changed = False
+    for p in prods:
+        old_cat = p.get('category','').upper()
+        if 'HONEY' in old_cat or 'PURE' in old_cat or 'BERI' in old_cat or 'SIDR' in old_cat:
+            if p.get('category') != "HONEY":
+                p['category'] = "HONEY"
+                changed = True
+        elif 'HOME' in old_cat or 'DECOR' in old_cat:
+            p['category'] = "HOME & DECOR"
+            changed = True
+        elif 'KITCHEN' in old_cat or 'GADGET' in old_cat:
+            p['category'] = "KITCHEN GADGETS"
+            changed = True
+        elif 'HEALTH' in old_cat:
+            p['category'] = "HEALTH CARE & BEAUTY"
+            changed = True
+        elif 'SKIN' in old_cat or 'BEAUTY' in old_cat:
+            p['category'] = "SKIN CARE PRODUCTS"
+            changed = True
+    if changed:
+        save_json(PRODUCT_FILE, prods)
+        st.session_state.products = prods
+
+fix_old_categories()
 
 def get_password():
     if os.path.exists(PASS_FILE):
@@ -65,9 +99,7 @@ def create_order(products_list, total):
     new_order={"id": order_id,"time": datetime.now().strftime("%Y-%m-%d %H:%M"),"products": [{"name": p['name'], "price": p['final'], "category": p.get('category','')} for p in products_list],"total": total,"status": "Pending","reason": ""}
     orders.append(new_order); save_json(ORDERS_FILE, orders); st.session_state.orders=orders; return order_id
 
-# --- NEW FORMAT FUNCTION - AAPKI DEMAND KE MUTABIQ ---
 def get_whatsapp_msg(order_id, products_list, total=None):
-    # Aapka Format: Asalam O Alaikum Mehar Mart Order Krna hy phr Order Id phr product details
     msg = f"Asalam O Alaikum\nMehar Mart Order Krna Hy\n\nOrder ID: {order_id}\n\n"
     for p in products_list:
         msg += f"Product: {p['name']}\nCategory: {p.get('category','')}\nPrice: Rs.{p['final'] if 'final' in p else p.get('price','')}\n\n"
@@ -77,7 +109,7 @@ def get_whatsapp_msg(order_id, products_list, total=None):
     return msg
 
 if st.session_state.is_admin:
-    st.markdown("### ADMIN PANEL")
+    st.markdown("### ADMIN PANEL - DARAZ CATEGORY SYSTEM")
     menu = st.selectbox("Menu", ["STORE VIEW","ORDERS - DARAZ","PRODUCT SYSTEM","MONEY","STOCK","SETTINGS"], index=0)
     st.session_state.admin_menu=menu
     orders_data=load_json(ORDERS_FILE, [])
@@ -98,10 +130,14 @@ else:
     menu="STORE VIEW"
 
 if menu=="PRODUCT SYSTEM":
-    st.subheader("Add Product - With Category")
-    category=st.selectbox("Category Select Karo", st.session_state.categories)
-    new_cat=st.text_input("New Category Add Karo")
-    if st.button("Add Category"):
+    st.subheader("Add Product - Daraz Category Dropdown")
+    # FORCE NEW CATEGORIES - OVERRIDE OLD FILE
+    st.session_state.categories = NEW_DARAZ_CATEGORIES
+    save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
+    st.info("New Daraz Categories: HONEY (Single - No More Pure/Beri Alag), HOME & DECOR, KITCHEN GADGETS, HEALTH CARE & BEAUTY, SKIN CARE PRODUCTS")
+    category=st.selectbox("Category Select Karo - Dropdown", st.session_state.categories, index=0)
+    new_cat=st.text_input("New Category Add Karo (Agar Chahiye)")
+    if st.button("Add New Category"):
         if new_cat and new_cat.upper() not in st.session_state.categories:
             st.session_state.categories.append(new_cat.upper()); save_json(CAT_FILE, st.session_state.categories); st.success(f"Category {new_cat.upper()} Added!"); st.rerun()
     name=st.text_input("Product Name *")
@@ -127,9 +163,9 @@ if menu=="PRODUCT SYSTEM":
                 try: img=Image.open(img_file); img.thumbnail((800,800)); buf=io.BytesIO(); img.save(buf, format="JPEG", quality=80); img_b64=base64.b64encode(buf.getvalue()).decode()
                 except: pass
             prod={"name":name,"category":category,"sell":bechna,"kharid":kharid,"discount":discount,"final":pay,"buy":kharid,"stock":stock,"expiry":expiry.strftime("%Y-%m-%d"),"profit":profit,"highlights":highlights,"full_desc":full_desc,"specs":specs,"image_b64":img_b64}
-            st.session_state.products.append(prod); save_json(PRODUCT_FILE, st.session_state.products); st.success(f"Saved in {category}!")
+            st.session_state.products.append(prod); save_json(PRODUCT_FILE, st.session_state.products); st.success(f"Saved in {category} - Daraz Style!")
     st.divider()
-    st.write("**Categories:** " + ", ".join(st.session_state.categories))
+    st.write("**Current Daraz Categories:** " + " | ".join(st.session_state.categories))
     for idx,p in enumerate(st.session_state.products):
         c1,c2=st.columns([4,1])
         with c1: st.write(f"{idx+1}. {p['name']} - {p.get('category','')} - Rs.{p['final']}")
@@ -175,6 +211,14 @@ elif menu=="STOCK":
         if st.button(f"Plus {idx}"): st.session_state.products[idx]['stock']+=1; save_json(PRODUCT_FILE, st.session_state.products); st.rerun()
 
 elif menu=="SETTINGS":
+    st.subheader("Fix Categories")
+    if st.button("FIX ALL OLD CATEGORIES TO NEW DARAZ SYSTEM - HONEY SINGLE", type="primary"):
+        fix_old_categories()
+        st.session_state.categories = NEW_DARAZ_CATEGORIES
+        save_json(CAT_FILE, NEW_DARAZ_CATEGORIES)
+        st.success("Fixed! All PURE HONEY, BERI HONEY, SIDR HONEY -> HONEY. New Daraz Categories Applied!")
+        st.rerun()
+    st.divider()
     st.subheader("Logo")
     logo_file=st.file_uploader("Upload Logo", type=["png","jpg","jpeg"])
     if logo_file:
@@ -214,8 +258,8 @@ else:
     st.markdown(f"""
     <script>
     try {{
-        localStorage.setItem('mehar_cart_v84', `{cart_json}`);
-        localStorage.setItem('mehar_cart_time_v84', new Date().toISOString());
+        localStorage.setItem('mehar_cart_v85', `{cart_json}`);
+        localStorage.setItem('mehar_cart_time_v85', new Date().toISOString());
         localStorage.setItem('mehar_cart_expiry', new Date(Date.now() + 30*24*60*60*1000).toISOString());
     }} catch(e) {{}}
     </script>
@@ -263,19 +307,14 @@ else:
         else:
             st.session_state.selected_product=None; st.rerun()
     else:
-        st.write("**Categories - Product Dekhne ke liye All pe Click Karo:**")
-        if st.button("🌟 SHOW ALL PRODUCTS - SAB PRODUCT DEKHO", type="primary", use_container_width=True):
-            st.session_state.selected_category="All"; st.rerun()
-        
-        cat_cols = st.columns(3)
-        categories_to_show = ["All"] + st.session_state.categories
-        for i, cat in enumerate(categories_to_show):
-            col_idx = i % 3
-            with cat_cols[col_idx]:
-                is_selected = st.session_state.selected_category == cat
-                if st.button(f"{'✅ ' if is_selected else ''}{cat}", key=f"cat_{cat}", use_container_width=True, type="primary" if is_selected else "secondary"):
-                    st.session_state.selected_category = cat
-                    st.rerun()
+        # DARAZ STYLE CATEGORY DROPDOWN - NOT BUTTONS - DROPDOWN
+        st.write("**Select Category - Daraz Style Dropdown:**")
+        # Dropdown for category filter - Daraz jaisa
+        category_options = ["All"] + NEW_DARAZ_CATEGORIES
+        selected_from_dropdown = st.selectbox("Category Filter - Dropdown", category_options, index=category_options.index(st.session_state.selected_category) if st.session_state.selected_category in category_options else 0, label_visibility="collapsed")
+        if selected_from_dropdown != st.session_state.selected_category:
+            st.session_state.selected_category = selected_from_dropdown
+            st.rerun()
         
         search=st.text_input("", placeholder="Search in Mehar Mart... (Name se search)", label_visibility="collapsed")
         
@@ -302,16 +341,7 @@ else:
         
         prods=st.session_state.products
         if st.session_state.selected_category != "All":
-            selected = st.session_state.selected_category.lower()
-            filtered_prods = []
-            for p in prods:
-                cat = p.get('category','').lower()
-                name = p.get('name','').lower()
-                if selected in cat or selected in name or any(word in cat or word in name for word in selected.split()):
-                    filtered_prods.append(p)
-            if len(filtered_prods)==0:
-                filtered_prods = [p for p in prods if p.get('category','') == st.session_state.selected_category]
-            prods = filtered_prods
+            prods=[p for p in prods if p.get('category','') == st.session_state.selected_category]
         
         if search.strip(): 
             prods=[p for p in prods if search.lower() in p['name'].lower() or search.lower() in p.get('category','').lower()]
@@ -321,14 +351,8 @@ else:
         
         if len(prods)==0:
             st.error(f"No Products in {st.session_state.selected_category}")
-            st.warning("Neeche All pe click karo to sab products dikhenge!")
             if st.button("🔄 SHOW ALL PRODUCTS", type="primary", use_container_width=True):
                 st.session_state.selected_category="All"; st.rerun()
-            st.divider()
-            st.subheader("All Products (Emergency Show):")
-            prods = st.session_state.products
-            if search.strip(): 
-                prods=[p for p in prods if search.lower() in p['name'].lower()]
         
         for idx, p in enumerate(prods):
             try:
