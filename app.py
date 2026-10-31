@@ -1,4 +1,4 @@
-# MEHAR MART V83 - CLIENT PRODUCT SHOW FIX - SMART CATEGORY FILTER + DEFAULT ALL
+# MEHAR MART V84 - WHATSAPP MESSAGE FIX - ASALAM O ALAIKUM MEHAR MART ORDER KRNA HY + ORDER ID + DETAILS
 import streamlit as st, os, urllib.parse, json
 from datetime import datetime, timedelta
 from PIL import Image
@@ -50,12 +50,10 @@ def get_visits():
 
 if st.query_params.get("admin")==get_password():
     st.session_state.is_admin=True
-    # Admin ke liye filter All hi rahega
     st.session_state.selected_category="All"
 
 if not st.session_state.is_admin:
     st.markdown("<style>header, footer {visibility: hidden;} .block-container{padding-top:0rem;} [data-testid='stToolbar']{display:none;} [data-testid='stAppDeployButton']{display:none;}</style>", unsafe_allow_html=True)
-    # CLIENT KE LIYE - AGAR PEHLE SE BERI HONEY SELECTED HAI TO ALL PE LAO - TAAKE PRODUCT DIKHE
     if st.session_state.selected_category not in ["All"] + st.session_state.categories:
         st.session_state.selected_category="All"
 else:
@@ -66,6 +64,17 @@ def create_order(products_list, total):
     order_id = datetime.now().strftime("%Y%m%d%H%M%S") + str(len(orders)+1)
     new_order={"id": order_id,"time": datetime.now().strftime("%Y-%m-%d %H:%M"),"products": [{"name": p['name'], "price": p['final'], "category": p.get('category','')} for p in products_list],"total": total,"status": "Pending","reason": ""}
     orders.append(new_order); save_json(ORDERS_FILE, orders); st.session_state.orders=orders; return order_id
+
+# --- NEW FORMAT FUNCTION - AAPKI DEMAND KE MUTABIQ ---
+def get_whatsapp_msg(order_id, products_list, total=None):
+    # Aapka Format: Asalam O Alaikum Mehar Mart Order Krna hy phr Order Id phr product details
+    msg = f"Asalam O Alaikum\nMehar Mart Order Krna Hy\n\nOrder ID: {order_id}\n\n"
+    for p in products_list:
+        msg += f"Product: {p['name']}\nCategory: {p.get('category','')}\nPrice: Rs.{p['final'] if 'final' in p else p.get('price','')}\n\n"
+    if total and len(products_list)>1:
+        msg += f"Total: Rs.{total}\n\n"
+    msg += "Please Confirm My Order - Shukria"
+    return msg
 
 if st.session_state.is_admin:
     st.markdown("### ADMIN PANEL")
@@ -183,8 +192,6 @@ elif menu=="SETTINGS":
         save_json(ORDERS_FILE, []); st.rerun()
 
 else:
-    # CLIENT STORE VIEW - FIXED
-    # ALWAYS LOAD FRESH PRODUCTS FROM FILE FOR CLIENT
     fresh_products = load_json(PRODUCT_FILE, [])
     if len(fresh_products) != len(st.session_state.products):
         st.session_state.products = fresh_products
@@ -207,8 +214,8 @@ else:
     st.markdown(f"""
     <script>
     try {{
-        localStorage.setItem('mehar_cart_v83', `{cart_json}`);
-        localStorage.setItem('mehar_cart_time_v83', new Date().toISOString());
+        localStorage.setItem('mehar_cart_v84', `{cart_json}`);
+        localStorage.setItem('mehar_cart_time_v84', new Date().toISOString());
         localStorage.setItem('mehar_cart_expiry', new Date(Date.now() + 30*24*60*60*1000).toISOString());
     }} catch(e) {{}}
     </script>
@@ -239,9 +246,9 @@ else:
             with c2:
                 if st.button("Buy Now - Place Order", type="primary", use_container_width=True, key="detail_buy"):
                     oid=create_order([p], p['final'])
-                    single=f"Asalam O Alaikum\nOrder ID: {oid}\nProduct: {p['name']}\nPrice: Rs.{p['final']}\nCategory: {p.get('category','')}"
+                    whatsapp_msg = get_whatsapp_msg(oid, [p])
                     st.success(f"Order {oid} Placed! Pending")
-                    st.link_button(f"WhatsApp Confirm {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(single)}", type="primary", use_container_width=True)
+                    st.link_button(f"WhatsApp Confirm {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
             st.divider()
             st.subheader("Highlights")
             st.write(p.get('highlights',''))
@@ -256,9 +263,7 @@ else:
         else:
             st.session_state.selected_product=None; st.rerun()
     else:
-        # CATEGORY FILTER - SMART FIX - SHOW ALL BY DEFAULT + SMART MATCHING
         st.write("**Categories - Product Dekhne ke liye All pe Click Karo:**")
-        # FORCE ALL BUTTON ON TOP
         if st.button("🌟 SHOW ALL PRODUCTS - SAB PRODUCT DEKHO", type="primary", use_container_width=True):
             st.session_state.selected_category="All"; st.rerun()
         
@@ -286,11 +291,9 @@ else:
                 st.write(f"**Total: Rs.{cart_total}**")
                 if st.button(f"Checkout Rs.{cart_total} - Place Order", type="primary", use_container_width=True):
                     oid=create_order(st.session_state.cart, cart_total)
-                    txt=f"Asalam O Alaikum\nOrder ID: {oid}\n\n"
-                    for x in st.session_state.cart: txt+=f"Product: {x['name']} - Rs.{x['final']} - {x.get('category','')}\n"
-                    txt+=f"\nTotal: Rs.{cart_total}\nStatus: Pending"
+                    whatsapp_msg = get_whatsapp_msg(oid, st.session_state.cart, cart_total)
                     st.success(f"Order {oid} Placed! Pending")
-                    st.link_button(f"WhatsApp Confirm Order {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(txt)}", type="primary", use_container_width=True)
+                    st.link_button(f"WhatsApp Confirm Order {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
                 if st.button("Clear Cart", use_container_width=True):
                     st.session_state.cart=[]; st.rerun()
         
@@ -298,18 +301,14 @@ else:
             st.info("💡 Cart 1 MONTH (30 Din) tak save rahega!")
         
         prods=st.session_state.products
-        # SMART FILTER - FIXED LOGIC - BERI HONEY FILTER ME PURE HONEY WALA BERI HONEY BHI AYEGA
         if st.session_state.selected_category != "All":
             selected = st.session_state.selected_category.lower()
             filtered_prods = []
             for p in prods:
                 cat = p.get('category','').lower()
                 name = p.get('name','').lower()
-                # SMART MATCH: Agar category me ya naam me selected ka word ho to dikhao
-                # Example: BERI HONEY selected -> PURE HONEY + Beri honey naam wala product dikhega
                 if selected in cat or selected in name or any(word in cat or word in name for word in selected.split()):
                     filtered_prods.append(p)
-            # Agar smart filter se 0 aye to exact match check karo
             if len(filtered_prods)==0:
                 filtered_prods = [p for p in prods if p.get('category','') == st.session_state.selected_category]
             prods = filtered_prods
@@ -325,7 +324,6 @@ else:
             st.warning("Neeche All pe click karo to sab products dikhenge!")
             if st.button("🔄 SHOW ALL PRODUCTS", type="primary", use_container_width=True):
                 st.session_state.selected_category="All"; st.rerun()
-            # AGAR 0 HAI TO PHIR BHI ALL PRODUCTS DIKHAO - EMERGENCY FIX
             st.divider()
             st.subheader("All Products (Emergency Show):")
             prods = st.session_state.products
@@ -358,7 +356,7 @@ else:
                         logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added! 1 MONTH tak save!"); st.rerun()
                 if st.button(f"Buy Now Rs.{p['final']}", key=f"buy_{real_idx}_{idx}", use_container_width=True):
                     oid=create_order([p], p['final'])
-                    single=f"Asalam O Alaikum\nOrder ID: {oid}\nProduct: {p['name']}\nCategory: {p.get('category','')}\nPrice: Rs.{p['final']}"
+                    whatsapp_msg = get_whatsapp_msg(oid, [p])
                     st.success(f"Order {oid} Placed! Pending")
-                    st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(single)}", type="primary", use_container_width=True)
+                    st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(whatsapp_msg)}", type="primary", use_container_width=True)
         st.markdown("<div style='height:150px;'></div>", unsafe_allow_html=True)
