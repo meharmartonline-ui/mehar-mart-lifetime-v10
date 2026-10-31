@@ -1,4 +1,4 @@
-# MEHAR MART V82 - CART 1 MONTH SAVE - 30 DIN TAK SAVE RAHEGA - DARAZ FULL
+# MEHAR MART V83 - CLIENT PRODUCT SHOW FIX - SMART CATEGORY FILTER + DEFAULT ALL
 import streamlit as st, os, urllib.parse, json
 from datetime import datetime, timedelta
 from PIL import Image
@@ -50,11 +50,16 @@ def get_visits():
 
 if st.query_params.get("admin")==get_password():
     st.session_state.is_admin=True
+    # Admin ke liye filter All hi rahega
+    st.session_state.selected_category="All"
 
 if not st.session_state.is_admin:
-    st.markdown("<style>header, footer {visibility: hidden;} .block-container{padding-top:0rem;} [data-testid='stToolbar']{display:none;}</style>", unsafe_allow_html=True)
+    st.markdown("<style>header, footer {visibility: hidden;} .block-container{padding-top:0rem;} [data-testid='stToolbar']{display:none;} [data-testid='stAppDeployButton']{display:none;}</style>", unsafe_allow_html=True)
+    # CLIENT KE LIYE - AGAR PEHLE SE BERI HONEY SELECTED HAI TO ALL PE LAO - TAAKE PRODUCT DIKHE
+    if st.session_state.selected_category not in ["All"] + st.session_state.categories:
+        st.session_state.selected_category="All"
 else:
-    st.markdown("<style>footer {visibility: hidden;} [data-testid='stToolbar']{display:none;}</style>", unsafe_allow_html=True)
+    st.markdown("<style>footer {visibility: hidden;} [data-testid='stToolbar']{display:none;} [data-testid='stAppDeployButton']{display:none;}</style>", unsafe_allow_html=True)
 
 def create_order(products_list, total):
     orders=load_json(ORDERS_FILE, [])
@@ -78,7 +83,7 @@ if st.session_state.is_admin:
     with col2:
         if st.button("ADD PRODUCT", use_container_width=True): st.session_state.admin_menu="PRODUCT SYSTEM"; st.rerun()
     with col3:
-        if st.button("LOGOUT", use_container_width=True): st.session_state.is_admin=False; st.query_params.clear(); st.rerun()
+        if st.button("LOGOUT", use_container_width=True): st.session_state.is_admin=False; st.query_params.clear(); st.session_state.selected_category="All"; st.rerun()
     st.divider()
 else:
     menu="STORE VIEW"
@@ -178,6 +183,12 @@ elif menu=="SETTINGS":
         save_json(ORDERS_FILE, []); st.rerun()
 
 else:
+    # CLIENT STORE VIEW - FIXED
+    # ALWAYS LOAD FRESH PRODUCTS FROM FILE FOR CLIENT
+    fresh_products = load_json(PRODUCT_FILE, [])
+    if len(fresh_products) != len(st.session_state.products):
+        st.session_state.products = fresh_products
+    
     cart_count=len(st.session_state.cart)
     cart_total=sum([p['final'] for p in st.session_state.cart])
     logo_html=""
@@ -185,21 +196,19 @@ else:
         try: logo_html=f"<img src='data:image/png;base64,{st.session_state.logo_b64}' style='height:28px; margin-right:8px; background:white; border-radius:4px; padding:2px; vertical-align:middle;'>"
         except: pass
     st.markdown(f"""
-    <div style="background:#f85606; padding:10px 15px; margin:-1rem -1rem 0 -1rem; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:99;">
+    <div style="background:#f85606; padding:10px 15px; margin:-1rem -1rem 0 -1rem; display:flex; justify-content:space-between; align-items:center;">
     <div style="display:flex; align-items:center; color:white; font-size:18px; font-weight:bold;">{logo_html}MEHAR MART</div>
     <div style="background:white; color:#f85606; padding:5px 12px; border-radius:20px; font-size:13px; font-weight:bold;">🛒 {cart_count} | {st.session_state.selected_category}</div>
     </div>
     """, unsafe_allow_html=True)
     st.write("")
 
-    # CART SAVE FOR 1 MONTH - 30 DAYS
     cart_json = json.dumps([{"name": p['name'], "price": p['final'], "cat": p.get('category','')} for p in st.session_state.cart])
     st.markdown(f"""
     <script>
-    // SAVE CART FOR 1 MONTH - 30 DAYS
     try {{
-        localStorage.setItem('mehar_cart_v82', `{cart_json}`);
-        localStorage.setItem('mehar_cart_time_v82', new Date().toISOString());
+        localStorage.setItem('mehar_cart_v83', `{cart_json}`);
+        localStorage.setItem('mehar_cart_time_v83', new Date().toISOString());
         localStorage.setItem('mehar_cart_expiry', new Date(Date.now() + 30*24*60*60*1000).toISOString());
     }} catch(e) {{}}
     </script>
@@ -226,7 +235,7 @@ else:
             c1,c2=st.columns(2)
             with c1:
                 if st.button("Add to Cart", type="primary", use_container_width=True, key="detail_add"):
-                    logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added to Cart - 1 MONTH tak save rahega!"); st.rerun()
+                    logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added to Cart - 1 MONTH tak save!"); st.rerun()
             with c2:
                 if st.button("Buy Now - Place Order", type="primary", use_container_width=True, key="detail_buy"):
                     oid=create_order([p], p['final'])
@@ -247,11 +256,16 @@ else:
         else:
             st.session_state.selected_product=None; st.rerun()
     else:
-        st.write("**Categories:**")
-        cat_cols = st.columns(4)
+        # CATEGORY FILTER - SMART FIX - SHOW ALL BY DEFAULT + SMART MATCHING
+        st.write("**Categories - Product Dekhne ke liye All pe Click Karo:**")
+        # FORCE ALL BUTTON ON TOP
+        if st.button("🌟 SHOW ALL PRODUCTS - SAB PRODUCT DEKHO", type="primary", use_container_width=True):
+            st.session_state.selected_category="All"; st.rerun()
+        
+        cat_cols = st.columns(3)
         categories_to_show = ["All"] + st.session_state.categories
         for i, cat in enumerate(categories_to_show):
-            col_idx = i % 4
+            col_idx = i % 3
             with cat_cols[col_idx]:
                 is_selected = st.session_state.selected_category == cat
                 if st.button(f"{'✅ ' if is_selected else ''}{cat}", key=f"cat_{cat}", use_container_width=True, type="primary" if is_selected else "secondary"):
@@ -262,7 +276,7 @@ else:
         
         if cart_count>0:
             with st.container(border=True):
-                st.subheader(f"🛒 Your Cart - {cart_count} Products (1 MONTH Save - 30 Din)")
+                st.subheader(f"🛒 Your Cart - {cart_count} Products (1 MONTH Save)")
                 for i,item in enumerate(st.session_state.cart):
                     ca,cb=st.columns([3,1])
                     with ca: st.write(f"**{item['name']}** - Rs.{item['final']} - {item.get('category','')}")
@@ -277,66 +291,74 @@ else:
                     txt+=f"\nTotal: Rs.{cart_total}\nStatus: Pending"
                     st.success(f"Order {oid} Placed! Pending")
                     st.link_button(f"WhatsApp Confirm Order {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(txt)}", type="primary", use_container_width=True)
-                if st.button("Clear Cart - Empty", use_container_width=True):
+                if st.button("Clear Cart", use_container_width=True):
                     st.session_state.cart=[]; st.rerun()
         
         if cart_count==0:
-            st.success("💡 Cart 1 MONTH (30 Din) tak save rahega - Client 1 month baad bhi aaye to uska cart yahan hoga - Direct order kar sakega!")
-            st.markdown("""
-            <div id="saved-cart-info-v82" style="background:#e8f5e9; padding:10px; border-radius:8px; margin:10px 0;">
-            <b>🛒 1 MONTH Saved Cart Check:</b> Browser me 30 din tak save rahega
-            </div>
-            <script>
-            try {
-                const saved = localStorage.getItem('mehar_cart_v82');
-                const time = localStorage.getItem('mehar_cart_time_v82');
-                const expiry = localStorage.getItem('mehar_cart_expiry');
-                const now = new Date();
-                const expDate = expiry ? new Date(expiry) : null;
-                if (saved && saved !== '[]' && expDate && now < expDate) {
-                    document.getElementById('saved-cart-info-v82').innerHTML += '<br><b>Saved Products (30 din tak):</b> ' + saved + '<br><small>Saved: ' + time + '</small><br><small>Expiry: ' + expiry + ' (1 Month)</small>';
-                } else if (expDate && now >= expDate) {
-                    localStorage.removeItem('mehar_cart_v82');
-                    document.getElementById('saved-cart-info-v82').innerHTML += '<br><small>Cart expired after 30 days - Auto cleared</small>';
-                }
-            } catch(e) {}
-            </script>
-            """, unsafe_allow_html=True)
+            st.info("💡 Cart 1 MONTH (30 Din) tak save rahega!")
         
         prods=st.session_state.products
+        # SMART FILTER - FIXED LOGIC - BERI HONEY FILTER ME PURE HONEY WALA BERI HONEY BHI AYEGA
         if st.session_state.selected_category != "All":
-            prods=[p for p in prods if p.get('category','') == st.session_state.selected_category]
-        if search.strip(): prods=[p for p in prods if search.lower() in p['name'].lower() or search.lower() in p.get('category','').lower()]
+            selected = st.session_state.selected_category.lower()
+            filtered_prods = []
+            for p in prods:
+                cat = p.get('category','').lower()
+                name = p.get('name','').lower()
+                # SMART MATCH: Agar category me ya naam me selected ka word ho to dikhao
+                # Example: BERI HONEY selected -> PURE HONEY + Beri honey naam wala product dikhega
+                if selected in cat or selected in name or any(word in cat or word in name for word in selected.split()):
+                    filtered_prods.append(p)
+            # Agar smart filter se 0 aye to exact match check karo
+            if len(filtered_prods)==0:
+                filtered_prods = [p for p in prods if p.get('category','') == st.session_state.selected_category]
+            prods = filtered_prods
+        
+        if search.strip(): 
+            prods=[p for p in prods if search.lower() in p['name'].lower() or search.lower() in p.get('category','').lower()]
         
         st.write(f"**Showing {len(prods)} Products in {st.session_state.selected_category}**")
+        st.caption(f"Total Products in Store: {len(st.session_state.products)}")
         
         if len(prods)==0:
-            st.markdown(f"<br><div style='text-align:center;'><p style='color:gray;'>No Products in {st.session_state.selected_category}</p></div>", unsafe_allow_html=True)
-        else:
-            for idx, p in enumerate(prods):
-                real_idx = st.session_state.products.index(p) if p in st.session_state.products else idx
-                with st.container(border=True):
-                    if p.get('image_b64'):
-                        try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
-                        except: pass
-                    st.write(f"**{p['name']}**")
-                    st.caption(f"Category: {p.get('category','')}")
-                    st.markdown(f"""
-                    <div style="margin:8px 0;">
-                    <div style="font-size:20px; font-weight:bold; color:#f85606;">Rs. {p['final']}</div>
-                    <div style="font-size:13px; color:#757575;"><span style="text-decoration:line-through;">Rs. {p.get('sell', p['final'])}</span> <span style="background:#f85606; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:6px;">-{p.get('discount',0)}%</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    c1,c2=st.columns(2)
-                    with c1:
-                        if st.button("View Details", key=f"view_{real_idx}", use_container_width=True):
-                            st.session_state.selected_product=real_idx; st.rerun()
-                    with c2:
-                        if st.button("Add to Cart", key=f"add_{real_idx}", use_container_width=True, type="primary"):
-                            logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added! 1 MONTH tak save rahega!"); st.rerun()
-                    if st.button(f"Buy Now Rs.{p['final']}", key=f"buy_{real_idx}", use_container_width=True):
-                        oid=create_order([p], p['final'])
-                        single=f"Asalam O Alaikum\nOrder ID: {oid}\nProduct: {p['name']}\nCategory: {p.get('category','')}\nPrice: Rs.{p['final']}"
-                        st.success(f"Order {oid} Placed! Pending")
-                        st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(single)}", type="primary", use_container_width=True)
+            st.error(f"No Products in {st.session_state.selected_category}")
+            st.warning("Neeche All pe click karo to sab products dikhenge!")
+            if st.button("🔄 SHOW ALL PRODUCTS", type="primary", use_container_width=True):
+                st.session_state.selected_category="All"; st.rerun()
+            # AGAR 0 HAI TO PHIR BHI ALL PRODUCTS DIKHAO - EMERGENCY FIX
+            st.divider()
+            st.subheader("All Products (Emergency Show):")
+            prods = st.session_state.products
+            if search.strip(): 
+                prods=[p for p in prods if search.lower() in p['name'].lower()]
+        
+        for idx, p in enumerate(prods):
+            try:
+                real_idx = st.session_state.products.index(p)
+            except:
+                real_idx = idx
+            with st.container(border=True):
+                if p.get('image_b64'):
+                    try: st.image(Image.open(io.BytesIO(base64.b64decode(p['image_b64']))), use_column_width=True)
+                    except: pass
+                st.write(f"**{p['name']}**")
+                st.caption(f"Category: {p.get('category','')}")
+                st.markdown(f"""
+                <div style="margin:8px 0;">
+                <div style="font-size:20px; font-weight:bold; color:#f85606;">Rs. {p['final']}</div>
+                <div style="font-size:13px; color:#757575;"><span style="text-decoration:line-through;">Rs. {p.get('sell', p['final'])}</span> <span style="background:#f85606; color:white; padding:2px 6px; border-radius:3px; font-size:11px; margin-left:6px;">-{p.get('discount',0)}%</span></div>
+                </div>
+                """, unsafe_allow_html=True)
+                c1,c2=st.columns(2)
+                with c1:
+                    if st.button("View Details", key=f"view_{real_idx}_{idx}", use_container_width=True):
+                        st.session_state.selected_product=real_idx; st.rerun()
+                with c2:
+                    if st.button("Add to Cart", key=f"add_{real_idx}_{idx}", use_container_width=True, type="primary"):
+                        logs=load_json(CART_LOG_FILE, []); logs.append({"product":p['name'],"time":datetime.now().strftime("%Y-%m-%d %H:%M")}); save_json(CART_LOG_FILE, logs); st.session_state.cart.append(p); st.success("Added! 1 MONTH tak save!"); st.rerun()
+                if st.button(f"Buy Now Rs.{p['final']}", key=f"buy_{real_idx}_{idx}", use_container_width=True):
+                    oid=create_order([p], p['final'])
+                    single=f"Asalam O Alaikum\nOrder ID: {oid}\nProduct: {p['name']}\nCategory: {p.get('category','')}\nPrice: Rs.{p['final']}"
+                    st.success(f"Order {oid} Placed! Pending")
+                    st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(single)}", type="primary", use_container_width=True)
         st.markdown("<div style='height:150px;'></div>", unsafe_allow_html=True)
