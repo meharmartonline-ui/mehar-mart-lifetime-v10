@@ -400,3 +400,64 @@ else:
                 if st.button(f"Buy Now Rs.{p.get('final',0)}", key=f"buy_{real_idx}_{idx}", use_container_width=True):
                     oid=create_order([p], p.get('final',0)); msg=get_whatsapp_msg(oid, [p]); st.success(f"Order {oid} Placed"); st.link_button(f"Confirm on WhatsApp {oid}", f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(msg)}", type="primary", use_container_width=True)
         st.markdown("<div style='height:150px;'></div>", unsafe_allow_html=True)
+import streamlit as st
+import google.generativeai as genai
+import urllib.parse
+
+# --- 1. AI SETUP ---
+GEMINI_KEY = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=GEMINI_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+# --- 2. LIVE STORE DATA ---
+# Yahan aapke products ka list hai - Jarvis isi ko dekhega
+# Aap admin se jo add karoge, ye list auto update hogi
+def get_store_products():
+    # Agar aap products ko file ya database me save kar rahe ho to yahan se read karo
+    # Filhal example ke liye session se le rahe hain
+    if "products" not in st.session_state:
+        st.session_state.products = [] # Empty - Dummy delete ho gaya!
+    return st.session_state.products
+
+# --- 3. JARVIS CHAT BUBBLE - STORE PE HI ---
+st.divider()
+st.subheader("💬 Mehar Mart AI Agent - Jarvis Se Chat Karo")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "Salam Bhai! Mehar Mart me Khush Amdeed! Aapko kya chahiye?"}]
+
+for msg in st.session_state.messages:
+    st.chat_message(msg["role"]).write(msg["content"])
+
+if prompt := st.chat_input("Yahan likhen - e.g. Mujhe kapre dikhao"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.chat_message("user").write(prompt)
+
+    # Jarvis ka System Prompt - NO DUMMY DATA
+    products = get_store_products()
+    if not products:
+        store_info = "Store is currently EMPTY. Tell user to contact owner on WhatsApp 03452352112"
+    else:
+        store_info = f"Live Products: {products}"
+
+    system_prompt = f"""
+    You are Jarvis for Mehar Mart. Speak in Roman Urdu mix.
+    Live Store Data: {store_info}
+    Owner WhatsApp: 03452352112
+    RULE: Never mention old dummy products like Watch, AirPods, Wallet. Only use Live Store Data.
+    If store empty, say store khali hai. If products exist, show them.
+    For order, ask: Product Name + Address + Phone.
+    """
+
+    full_prompt = system_prompt + f"\n\nCustomer: {prompt}\nJarvis:"
+
+    response = model.generate_content(full_prompt)
+    reply = response.text
+
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+    st.chat_message("assistant").write(reply)
+    
+    # WhatsApp Button bhi saath de do
+    wa_msg = urllib.parse.quote(f"Salam! Mehar Mart - {prompt}")
+    wa_link = f"https://wa.me/923452352112?text={wa_msg}"
+    st.link_button("📲 WhatsApp Pe Continue Karo", wa_link)
