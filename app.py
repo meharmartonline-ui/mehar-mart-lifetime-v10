@@ -1,1507 +1,634 @@
-
+# MEHAR MART V97 — Separate Public Store + Private Admin Login
+# Existing V93 JSON files are reused. Client route never renders admin controls.
 import streamlit as st
-import json
-import os
-import io
-import base64
-import hashlib
-import hmac
-import secrets
-import urllib.parse
+import os, json, io, base64, urllib.parse, hashlib, hmac, secrets
 from datetime import datetime, timedelta
 from PIL import Image
 
-# ==========================================
-# MEHAR MART V97 - COMPLETE SINGLE FILE
-# ==========================================
-
-st.set_page_config(
-    page_title="MEHAR MART V97",
-    page_icon="🛒",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="Mehar Mart", layout="wide", initial_sidebar_state="collapsed")
 
 WA_NUMBER = "923452352112"
-
 PRODUCT_FILE = "products.json"
-ORDERS_FILE = "orders.json"
+PASS_FILE = "admin_password.txt"
 CAT_FILE = "categories.json"
 LOGO_FILE = "logo.json"
-PASS_FILE = "admin_password.txt"
-
-PRODUCT_BACKUP = "products_backup.json"
+ORDERS_FILE = "orders.json"
+BACKUP_FILE = "products_backup.json"
 ORDERS_BACKUP = "orders_backup.json"
+DEFAULT_CATS = ["HONEY", "HOME & DECOR", "KITCHEN GADGETS", "HEALTH CARE & BEAUTY", "SKIN CARE PRODUCTS", "OTHER"]
+DEFAULT_PASSWORD = os.environ.get("MEHAR_ADMIN_PASSWORD", "mehar123")
 
-NEW_CATS = [
-    "HONEY",
-    "HOME & DECOR",
-    "KITCHEN GADGETS",
-    "HEALTH CARE & BEAUTY",
-    "SKIN CARE PRODUCTS",
-    "OTHER"
-]
-
-# ==========================================
-# JSON DATABASE
-# ==========================================
-
-def load_json(file, default):
+def load_json(path, default):
     try:
-        if os.path.exists(file):
-            with open(file, "r", encoding="utf-8") as f:
-                return json.load(f)
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
-        pass
-
-    backups = {
-        PRODUCT_FILE: PRODUCT_BACKUP,
-        ORDERS_FILE: ORDERS_BACKUP
-    }
-
-    backup = backups.get(file)
-
-    if backup and os.path.exists(backup):
-        try:
-            with open(backup, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-
+        backup = BACKUP_FILE if path == PRODUCT_FILE else ORDERS_BACKUP if path == ORDERS_FILE else None
+        if backup:
+            try:
+                with open(backup, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
     return default
 
-
-def save_json(file, data):
+def save_json(path, data):
     try:
-        temp = file + ".tmp"
-
-        with open(temp, "w", encoding="utf-8") as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-
-        os.replace(temp, file)
-
-        backups = {
-            PRODUCT_FILE: PRODUCT_BACKUP,
-            ORDERS_FILE: ORDERS_BACKUP
-        }
-
-        if file in backups:
-            backup = backups[file]
-            temp_backup = backup + ".tmp"
-
-            with open(temp_backup, "w", encoding="utf-8") as f:
+        os.replace(tmp, path)
+        backup = BACKUP_FILE if path == PRODUCT_FILE else ORDERS_BACKUP if path == ORDERS_FILE else None
+        if backup:
+            with open(backup + ".tmp", "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-
-            os.replace(temp_backup, backup)
-
+            os.replace(backup + ".tmp", backup)
         return True
-
     except Exception as e:
-        st.error(f"Database Error: {e}")
+        st.error(f"Save error: {e}")
         return False
 
-
-# ==========================================
-# PASSWORD SECURITY
-# ==========================================
-
-def get_password_hash(password):
-    salt = secrets.token_hex(16)
-    hashed = hashlib.pbkdf2_hmac(
-        "sha256",
-        password.encode(),
-        salt.encode(),
-        200000
-    ).hex()
-
-    return "PBKDF2:" + salt + ":" + hashed
-
-
-def check_password(password):
-    if not os.path.exists(PASS_FILE):
-        return password == "mehar123"
-
+def get_password_record():
     try:
         with open(PASS_FILE, "r", encoding="utf-8") as f:
-            saved = f.read().strip()
-
-        if saved.startswith("PBKDF2:"):
-            _, salt, expected = saved.split(":")
-            actual = hashlib.pbkdf2_hmac(
-                "sha256",
-                password.encode(),
-                salt.encode(),
-                200000
-            ).hex()
-
-            return hmac.compare_digest(actual, expected)
-
-        # Old V96 plain-text password compatibility
-        return hmac.compare_digest(password, saved)
-
+            return f.read().strip()
     except Exception:
-        return False
+        return DEFAULT_PASSWORD
 
+def password_ok(candidate):
+    stored = get_password_record()
+    if stored.startswith("pbkdf2$"):
+        try:
+            _, salt_hex, digest = stored.split("$", 2)
+            test = hashlib.pbkdf2_hmac("sha256", candidate.encode(), bytes.fromhex(salt_hex), 240000).hex()
+            return hmac.compare_digest(test, digest)
+        except Exception:
+            return False
+    return hmac.compare_digest(candidate, stored)
 
-def save_password(password):
+def set_password(password):
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 240000).hex()
+    with open(PASS_FILE, "w", encoding="utf-8") as f:
+        f.write(f"pbkdf2${salt.hex()}${digest}")
+
+def num(value):
     try:
-        with open(PASS_FILE, "w", encoding="utf-8") as f:
-            f.write(get_password_hash(password))
-        return True
+        return int(float(value or 0))
     except Exception:
-        return False
+        return 0
 
+def img_b64(upload, max_size=(900, 900), fmt="JPEG"):
+    try:
+        image = Image.open(upload).convert("RGB")
+        image.thumbnail(max_size)
+        buf = io.BytesIO()
+        image.save(buf, format=fmt, quality=82, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return None
 
-# ==========================================
-# PRODUCT DATA MIGRATION
-# ==========================================
+def show_image(product):
+    raw = product.get("image_b64")
+    if raw:
+        try:
+            st.image(Image.open(io.BytesIO(base64.b64decode(raw))), use_container_width=True)
+        except Exception:
+            st.caption("Image display nahi ho saki.")
 
-def normalize_products(products):
+def migrate_products(products):
     changed = False
-
     for p in products:
         if not isinstance(p, dict):
             continue
-
+        category = str(p.get("category", "") or "").upper().strip()
+        if category in {"PURE HONEY", "BERI HONEY", "SIDR HONEY", "PURE", "BERI", "SIDR"} or "PURE HONEY" in category or "BERI HONEY" in category:
+            p["category"] = "HONEY"
+            changed = True
         if not p.get("product_id"):
-            p["product_id"] = secrets.token_hex(8)
+            p["product_id"] = secrets.token_hex(6)
             changed = True
+    return changed
 
-        if "final" not in p:
-            p["final"] = p.get("price", p.get("sell", 0))
-            changed = True
-
-        if "sell" not in p:
-            p["sell"] = p.get("final", 0)
-            changed = True
-
-        if "stock" not in p:
-            p["stock"] = 0
-            changed = True
-
-        cat = str(p.get("category", "")).upper().strip()
-
-        if "HONEY" in cat or cat in ["PURE", "BERI", "SIDR"]:
-            if p.get("category") != "HONEY":
-                p["category"] = "HONEY"
-                changed = True
-
-    return products, changed
-
-
-# ==========================================
-# SESSION STATE
-# ==========================================
-
+# Session state
 if "products" not in st.session_state:
-    data = load_json(PRODUCT_FILE, [])
-    if not isinstance(data, list):
-        data = []
-
-    data, changed = normalize_products(data)
-    st.session_state.products = data
-
-    if changed:
-        save_json(PRODUCT_FILE, data)
-
+    st.session_state.products = load_json(PRODUCT_FILE, [])
+if not isinstance(st.session_state.products, list):
+    st.session_state.products = []
 if "orders" not in st.session_state:
-    data = load_json(ORDERS_FILE, [])
-    st.session_state.orders = data if isinstance(data, list) else []
-
+    st.session_state.orders = load_json(ORDERS_FILE, [])
 if "cart" not in st.session_state:
     st.session_state.cart = []
-
 if "categories" not in st.session_state:
-    cats = load_json(CAT_FILE, NEW_CATS)
-    st.session_state.categories = cats if isinstance(cats, list) else NEW_CATS
-
-if "is_admin" not in st.session_state:
-    st.session_state.is_admin = False
-
+    st.session_state.categories = load_json(CAT_FILE, DEFAULT_CATS[:])
+if not isinstance(st.session_state.categories, list):
+    st.session_state.categories = DEFAULT_CATS[:]
+for category in DEFAULT_CATS:
+    if category not in st.session_state.categories:
+        st.session_state.categories.append(category)
+if "logo_b64" not in st.session_state:
+    st.session_state.logo_b64 = load_json(LOGO_FILE, None)
 if "selected_product" not in st.session_state:
     st.session_state.selected_product = None
+if "selected_category" not in st.session_state:
+    st.session_state.selected_category = "All"
+if "admin_authenticated" not in st.session_state:
+    st.session_state.admin_authenticated = False
+if migrate_products(st.session_state.products):
+    save_json(PRODUCT_FILE, st.session_state.products)
+save_json(CAT_FILE, st.session_state.categories)
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = [
-        {
-            "role": "assistant",
-            "content": "Salam Bhai! Mehar Mart mein khush amdeed! Aapko kya chahiye?"
-        }
-    ]
-
-if "edit_product" not in st.session_state:
-    st.session_state.edit_product = None
-
-if "notice" not in st.session_state:
-    st.session_state.notice = ""
-
-# ==========================================
-# CSS DESIGN
-# ==========================================
+# Routing:
+# Client link: https://YOUR-APP.streamlit.app/
+# Admin link:  https://YOUR-APP.streamlit.app/?admin=1
+# ?admin=1 only shows login. It never authenticates by itself.
+admin_route = st.query_params.get("admin") == "1"
 
 st.markdown("""
 <style>
-.stApp {
-    background: #f7f8fa;
-}
-.block-container {
-    padding-top: 1rem;
-    padding-bottom: 3rem;
-    max-width: 1100px;
-}
-.main-header {
-    background: #f85606;
-    color: white;
-    padding: 17px;
-    border-radius: 12px;
-    font-size: 23px;
-    font-weight: bold;
-    text-align: center;
-}
-.product-card {
-    background: white;
-    padding: 12px;
-    border-radius: 12px;
-}
-.price {
-    color: #f85606;
-    font-size: 21px;
-    font-weight: bold;
-}
-div.stButton > button {
-    border-radius: 9px;
-}
+header, footer {visibility:hidden;}
+[data-testid="stToolbar"], [data-testid="stAppDeployButton"] {display:none;}
+.block-container {padding-top:1rem; padding-bottom:3rem; max-width:1100px;}
+.mm-header {background:#f85606;color:white;padding:13px 16px;border-radius:9px;
+display:flex;justify-content:space-between;align-items:center;font-size:20px;font-weight:800;}
+.mm-price {font-size:23px;font-weight:800;color:#f85606;}
+.mm-old {font-size:13px;color:#888;text-decoration:line-through;}
 </style>
 """, unsafe_allow_html=True)
 
-
-# ==========================================
-# HELPER FUNCTIONS
-# ==========================================
-
-def refresh_products():
-    st.session_state.products = load_json(PRODUCT_FILE, [])
-
-
-def refresh_orders():
-    st.session_state.orders = load_json(ORDERS_FILE, [])
-
-
-def get_product(product_id):
-    for p in st.session_state.products:
-        if p.get("product_id") == product_id:
-            return p
-    return None
-
-
-def save_product(product):
-    products = st.session_state.products
-
-    for i, old in enumerate(products):
-        if old.get("product_id") == product.get("product_id"):
-            products[i] = product
-            save_json(PRODUCT_FILE, products)
-            st.session_state.products = products
-            return
-
-    products.append(product)
-    save_json(PRODUCT_FILE, products)
-    st.session_state.products = products
-
-
-def delete_product(product_id):
-    products = [
-        p for p in st.session_state.products
-        if p.get("product_id") != product_id
-    ]
-
-    st.session_state.products = products
-    save_json(PRODUCT_FILE, products)
-
-
-def create_order(products_list, total):
-    refresh_orders()
-
-    order_id = (
-        datetime.now().strftime("%Y%m%d%H%M%S")
-        + secrets.token_hex(2).upper()
-    )
-
-    order_products = []
-
-    for p in products_list:
-        order_products.append({
-            "product_id": p.get("product_id"),
+def make_order(items, total):
+    orders = load_json(ORDERS_FILE, [])
+    order_id = datetime.now().strftime("%Y%m%d%H%M%S") + secrets.token_hex(2).upper()
+    saved_items = []
+    for p in items:
+        saved_items.append({
+            "product_id": p.get("product_id", ""),
             "name": p.get("name", ""),
-            "price": int(p.get("final", p.get("price", 0))),
+            "price": num(p.get("final", p.get("price", 0))),
             "category": p.get("category", ""),
             "quantity": 1
         })
-
     order = {
         "id": order_id,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "products": order_products,
-        "total": int(total),
+        "products": saved_items,
+        "total": num(total),
         "status": "Pending",
         "reason": "",
         "stock_deducted": False
     }
-
-    st.session_state.orders.append(order)
-    save_json(ORDERS_FILE, st.session_state.orders)
-
+    orders.append(order)
+    save_json(ORDERS_FILE, orders)
+    st.session_state.orders = orders
     return order_id
 
-
-def get_whatsapp_msg(order_id, products, total):
-    msg = (
-        "Assalam O Alaikum\n"
-        "MEHAR MART ORDER\n\n"
-        f"Order ID: {order_id}\n\n"
-    )
-
-    for p in products:
-        msg += (
-            f"Product: {p.get('name', '')}\n"
-            f"Category: {p.get('category', '')}\n"
-            f"Price: Rs.{p.get('final', p.get('price', 0))}\n\n"
-        )
-
-    msg += (
-        f"Total: Rs.{total}\n\n"
-        "Please confirm my Cash on Delivery order.\n"
-        "Shukriya!"
-    )
-
-    return msg
-
-
-def whatsapp_link(message):
-    return (
-        "https://wa.me/"
-        + WA_NUMBER
-        + "?text="
-        + urllib.parse.quote(message)
-    )
-
-
-def order_status(order_id, status):
-    refresh_orders()
-
-    for order in st.session_state.orders:
-        if order.get("id") != order_id:
-            continue
-
-        old_status = order.get("status", "Pending")
-
-        if old_status == status:
-            return
-
-        # Deduct stock only on confirmation
-        if status in ["Confirmed", "Delivered"] and not order.get("stock_deducted", False):
-
-            for item in order.get("products", []):
-                product = get_product(item.get("product_id"))
-
-                if product:
-                    qty = int(item.get("quantity", 1))
-                    product["stock"] = max(
-                        0,
-                        int(product.get("stock", 0)) - qty
-                    )
-
-            order["stock_deducted"] = True
-            save_json(PRODUCT_FILE, st.session_state.products)
-
-        # Restore stock when a confirmed order is cancelled
-        if status == "Cancelled" and order.get("stock_deducted", False):
-
-            for item in order.get("products", []):
-                product = get_product(item.get("product_id"))
-
-                if product:
-                    qty = int(item.get("quantity", 1))
-                    product["stock"] = (
-                        int(product.get("stock", 0)) + qty
-                    )
-
-            order["stock_deducted"] = False
-            save_json(PRODUCT_FILE, st.session_state.products)
-
-        order["status"] = status
-
-        save_json(ORDERS_FILE, st.session_state.orders)
-        return
-
-
-def image_from_product(p):
-    if not p.get("image_b64"):
-        return None
-
-    try:
-        raw = base64.b64decode(p["image_b64"])
-        return Image.open(io.BytesIO(raw))
-    except Exception:
-        return None
-
-
-# ==========================================
-# JARVIS SMART AI - NO API REQUIRED
-# ==========================================
-
-def get_smart_answer(question):
-    products = [
-        p for p in st.session_state.products
-        if isinstance(p, dict)
-    ]
-
-    q = question.lower().strip()
-
-    if not products:
-        return "Bhai, abhi store mein products available nahi hain."
-
-    if any(x in q for x in ["sasta", "sasti", "cheap", "kam price", "lowest"]):
-        available = [
-            p for p in products
-            if int(p.get("stock", 0)) > 0
-        ]
-
-        if not available:
-            return "Bhai, abhi stock available nahi hai."
-
-        p = min(
-            available,
-            key=lambda x: int(x.get("final", 0))
-        )
-
-        return (
-            f"Sab se sasta product ye hai:\n\n"
-            f"✅ {p.get('name')}\n"
-            f"Price: Rs.{p.get('final')}"
-        )
-
-    if any(x in q for x in ["mehnga", "expensive", "highest"]):
-        p = max(
-            products,
-            key=lambda x: int(x.get("final", 0))
-        )
-
-        return (
-            f"Sab se mehnga product:\n"
-            f"{p.get('name')} - Rs.{p.get('final')}"
-        )
-
-    matched = []
-
-    for p in products:
-        name = str(p.get("name", "")).lower()
-        category = str(p.get("category", "")).lower()
-
-        words = q.split()
-
-        if (
-            q in name
-            or q in category
-            or any(
-                len(w) >= 3 and (w in name or w in category)
-                for w in words
-            )
-        ):
-            matched.append(p)
-
-    if matched:
-        answer = "Jee Bhai! Ye products available hain:\n\n"
-
-        for p in matched[:10]:
-            answer += (
-                f"✅ {p.get('name')}\n"
-                f"Price: Rs.{p.get('final')}\n"
-                f"Stock: {p.get('stock', 0)}\n\n"
-            )
-
-        return answer
-
-    if any(x in q for x in ["list", "products", "sab", "kya hai"]):
-        answer = f"Mehar Mart mein {len(products)} products hain:\n\n"
-
-        for p in products[:15]:
-            answer += (
-                f"• {p.get('name')} - Rs.{p.get('final')}\n"
-            )
-
-        return answer
-
-    if any(x in q for x in ["delivery", "cod", "payment"]):
-        return (
-            "Bhai, Mehar Mart Cash on Delivery orders leta hai. "
-            "Delivery All Over Pakistan ke liye WhatsApp par order confirm karein."
-        )
-
-    return (
-        "Salam Bhai! Main Mehar Mart ka Smart Assistant hoon. "
-        "Aap product ka naam, Honey, price, sasti cheez ya delivery ke bare mein pooch sakte hain."
-    )
-
-
-# ==========================================
-# HEADER
-# ==========================================
-
-st.markdown(
-    '<div class="main-header">🛒 MEHAR MART</div>',
-    unsafe_allow_html=True
-)
-
-st.caption(
-    "Quality Products at Affordable Prices | "
-    "Cash on Delivery | Delivery All Over Pakistan"
-)
-
-if st.session_state.notice:
-    st.success(st.session_state.notice)
-    st.session_state.notice = ""
-
-# ==========================================
-# ADMIN LOGIN
-# ==========================================
-
-if not st.session_state.is_admin:
-
-    with st.expander("Admin Login"):
-        with st.form("admin_login"):
-            password = st.text_input(
-                "Admin Password",
-                type="password"
-            )
-
-            login = st.form_submit_button(
-                "LOGIN",
-                use_container_width=True
-            )
-
-            if login:
-                if check_password(password):
-                    st.session_state.is_admin = True
-                    st.rerun()
-                else:
-                    st.error("Wrong Password!")
-
-else:
-
-    st.subheader("🔐 ADMIN PANEL")
-
-    orders = load_json(ORDERS_FILE, [])
-    pending = sum(
-        1 for o in orders
-        if o.get("status") == "Pending"
-    )
-
-    confirmed = sum(
-        1 for o in orders
-        if o.get("status") in ["Confirmed", "Delivered"]
-    )
-
-    a, b, c = st.columns(3)
-
-    a.metric("Products", len(st.session_state.products))
-    b.metric("Pending Orders", pending)
-    c.metric("Confirmed Orders", confirmed)
-
-    menu = st.selectbox(
-        "ADMIN MENU",
-        [
-            "STORE VIEW",
-            "PRODUCT SYSTEM",
-            "ORDERS - DARAZ",
-            "MONEY",
-            "STOCK",
-            "BACKUP & RESTORE",
-            "SETTINGS"
-        ]
-    )
-
-    if st.button("LOGOUT", use_container_width=True):
-        st.session_state.is_admin = False
+def wa_text(order_id, items, total):
+    lines = ["Assalam-o-Alaikum", "Mehar Mart se order place karna hai.", f"Order ID: {order_id}", ""]
+    for p in items:
+        lines.extend([f"Product: {p.get('name','')}", f"Category: {p.get('category','')}",
+                      f"Price: Rs. {num(p.get('final', p.get('price', 0)))}", ""])
+    lines.extend([f"Total: Rs. {num(total)}", "Payment: Cash on Delivery",
+                  "Delivery: All Over Pakistan", "Please confirm my order. Shukriya."])
+    return "\n".join(lines)
+
+def wa_button(order_id, items, total, label="Confirm Order on WhatsApp"):
+    url = "https://wa.me/" + WA_NUMBER + "?text=" + urllib.parse.quote(wa_text(order_id, items, total))
+    st.link_button(label, url, type="primary", use_container_width=True)
+
+def admin_login():
+    st.title("🔐 Mehar Mart Admin Login")
+    st.write("Private Admin Panel — password ke baghair access nahi milega.")
+    with st.form("admin_login_form"):
+        password = st.text_input("Admin Password", type="password")
+        submit = st.form_submit_button("Login", type="primary", use_container_width=True)
+    if submit:
+        if password_ok(password):
+            st.session_state.admin_authenticated = True
+            st.rerun()
+        else:
+            st.error("Password ghalat hai.")
+    if st.button("← Client Store kholein", use_container_width=True):
+        st.session_state.admin_authenticated = False
+        st.query_params.clear()
         st.rerun()
 
-    st.divider()
-
-# ==========================================
-# PRODUCT SYSTEM
-# ==========================================
-
-if st.session_state.is_admin and menu == "PRODUCT SYSTEM":
-
-    st.subheader("PRODUCT SYSTEM")
-
-    st.write("Add New Product / Edit Existing Product")
-
-    edit_id = st.selectbox(
-        "Select Product to Edit",
-        ["NEW PRODUCT"] + [
-            p.get("product_id")
-            for p in st.session_state.products
-        ],
-        format_func=lambda x: (
-            "NEW PRODUCT"
-            if x == "NEW PRODUCT"
-            else next(
-                (
-                    p.get("name", "Product")
-                    for p in st.session_state.products
-                    if p.get("product_id") == x
-                ),
-                x
-            )
-        )
-    )
-
-    old = (
-        get_product(edit_id)
-        if edit_id != "NEW PRODUCT"
-        else {}
-    ) or {}
-
-    with st.form("product_form"):
-
-        categories = st.session_state.categories
-
-        old_category = old.get("category", "HONEY")
-
-        category = st.selectbox(
-            "Category",
-            categories,
-            index=(
-                categories.index(old_category)
-                if old_category in categories else 0
-            )
-        )
-
-        name = st.text_input(
-            "Product Name *",
-            value=old.get("name", "")
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            buy = st.number_input(
-                "Kharid Rate",
-                min_value=0,
-                max_value=1000000,
-                value=int(old.get("kharid", 0))
-            )
-
-        with col2:
-            sell = st.number_input(
-                "Selling Rate",
-                min_value=0,
-                max_value=1000000,
-                value=int(old.get("sell", old.get("final", 0)))
-            )
-
-        col3, col4 = st.columns(2)
-
-        with col3:
-            discount = st.number_input(
-                "Discount %",
-                min_value=0,
-                max_value=90,
-                value=int(old.get("discount", 0))
-            )
-
-        with col4:
-            stock = st.number_input(
-                "Stock",
-                min_value=0,
-                max_value=100000,
-                value=int(old.get("stock", 0))
-            )
-
-        expiry = st.date_input(
-            "Expiry",
-            value=(
-                datetime.strptime(old["expiry"], "%Y-%m-%d").date()
-                if old.get("expiry")
-                else (datetime.now() + timedelta(days=180)).date()
-            )
-        )
-
-        highlights = st.text_area(
-            "Highlights",
-            value=old.get("highlights", "")
-        )
-
-        description = st.text_area(
-            "Full Description",
-            value=old.get("full_desc", "")
-        )
-
-        specs = st.text_area(
-            "Specifications",
-            value=old.get("specs", "")
-        )
-
-        photo = st.file_uploader(
-            "Product Photo",
-            type=["jpg", "jpeg", "png", "webp"]
-        )
-
-        submitted = st.form_submit_button(
-            "SAVE PRODUCT",
-            type="primary",
-            use_container_width=True
-        )
-
-    if submitted:
-
-        if not name.strip():
-            st.error("Product Name zaroori hai!")
-
-        elif sell < buy:
-            st.error("Selling price kharid rate se kam hai!")
-
-        else:
-
-            image_b64 = old.get("image_b64")
-
-            if photo:
-                try:
-                    img = Image.open(photo).convert("RGB")
-                    img.thumbnail((800, 800))
-
-                    buffer = io.BytesIO()
-                    img.save(buffer, format="JPEG", quality=80)
-
-                    image_b64 = base64.b64encode(
-                        buffer.getvalue()
-                    ).decode()
-
-                except Exception as e:
-                    st.error(f"Image Error: {e}")
-
-            final_price = int(sell * (1 - discount / 100))
-
-            product = {
-                "product_id": old.get(
-                    "product_id",
-                    secrets.token_hex(8)
-                ),
-                "name": name.strip(),
-                "category": category,
-                "sell": int(sell),
-                "kharid": int(buy),
-                "discount": int(discount),
-                "final": final_price,
-                "buy": int(buy),
-                "stock": int(stock),
-                "expiry": expiry.strftime("%Y-%m-%d"),
-                "profit": final_price - int(buy),
-                "highlights": highlights,
-                "full_desc": description,
-                "specs": specs,
-                "image_b64": image_b64
-            }
-
-            save_product(product)
-            st.success("Product Saved Successfully!")
-            st.rerun()
-
-    st.divider()
-    st.subheader("ALL PRODUCTS")
-
-    for p in list(st.session_state.products):
-
-        with st.container(border=True):
-
-            st.write(
-                f"**{p.get('name')}** | "
-                f"{p.get('category')} | "
-                f"Rs.{p.get('final')}"
-            )
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                if st.button(
-                    "DELETE",
-                    key="delete_" + p["product_id"]
-                ):
-                    delete_product(p["product_id"])
-                    st.rerun()
-
-            with col2:
-                st.write(
-                    f"Stock: {p.get('stock', 0)}"
-                )
-
-# ==========================================
-# ORDERS
-# ==========================================
-
-elif st.session_state.is_admin and menu == "ORDERS - DARAZ":
-
-    st.subheader("CUSTOMER ORDERS")
-
-    refresh_orders()
-
-    if not st.session_state.orders:
-        st.info("No orders yet.")
-
-    for order in reversed(st.session_state.orders):
-
-        with st.container(border=True):
-
-            st.write(
-                f"**Order ID:** {order.get('id')}"
-            )
-
-            st.write(
-                f"Time: {order.get('time')} | "
-                f"Status: {order.get('status')}"
-            )
-
-            st.write(
-                f"Total: Rs.{order.get('total')}"
-            )
-
-            for p in order.get("products", []):
-                st.write(
-                    f"• {p.get('name')} - Rs.{p.get('price')}"
-                )
-
-            current_status = order.get("status", "Pending")
-
-            if current_status == "Pending":
-
-                c1, c2 = st.columns(2)
-
-                with c1:
-                    if st.button(
-                        "CONFIRM",
-                        key="confirm_" + order["id"]
-                    ):
-                        order_status(order["id"], "Confirmed")
-                        st.rerun()
-
-                with c2:
-                    if st.button(
-                        "CANCEL",
-                        key="cancel_" + order["id"]
-                    ):
-                        order_status(order["id"], "Cancelled")
-                        st.rerun()
-
-            elif current_status == "Confirmed":
-
-                if st.button(
-                    "MARK DELIVERED",
-                    key="deliver_" + order["id"]
-                ):
-                    order_status(order["id"], "Delivered")
-                    st.rerun()
-
-            elif current_status == "Cancelled":
-                st.error("Order Cancelled")
-
-            else:
-                st.success("Order Delivered")
-
-# ==========================================
-# MONEY MANAGEMENT
-# ==========================================
-
-elif st.session_state.is_admin and menu == "MONEY":
-
-    st.subheader("MONEY MANAGEMENT")
-
+def admin_panel():
+    products = st.session_state.products
     orders = load_json(ORDERS_FILE, [])
-
-    completed = [
-        o for o in orders
-        if o.get("status") in ["Confirmed", "Delivered"]
-    ]
-
-    sales = sum(
-        int(o.get("total", 0))
-        for o in completed
-    )
-
-    cost = 0
-
-    for order in completed:
-        for item in order.get("products", []):
-            product = get_product(item.get("product_id"))
-
-            if product:
-                cost += (
-                    int(product.get("kharid", 0))
-                    * int(item.get("quantity", 1))
-                )
-
-    profit = sales - cost
-
+    st.title("MEHAR MART — ADMIN PANEL")
+    confirmed = [o for o in orders if o.get("status") in ("Confirmed", "Delivered")]
     a, b, c = st.columns(3)
+    a.metric("Pending Orders", sum(1 for o in orders if o.get("status") == "Pending"))
+    b.metric("Confirmed / Delivered", len(confirmed))
+    c.metric("Sales", f"Rs. {sum(num(o.get('total')) for o in confirmed):,}")
+    menu = st.selectbox("Admin Menu", ["Dashboard", "PRODUCT SYSTEM", "ORDERS - DARAZ", "MONEY", "STOCK", "BACKUP", "SETTINGS"])
 
-    a.metric("Total Sales", f"Rs.{sales}")
-    b.metric("Estimated Cost", f"Rs.{cost}")
-    c.metric("Estimated Profit", f"Rs.{profit}")
+    if menu == "Dashboard":
+        x, y = st.columns(2)
+        x.metric("Total Products", len(products))
+        y.metric("Total Orders", len(orders))
+        st.info("Client store aur admin panel separate links par hain.")
 
-    st.caption(
-        "Profit is estimated using the current product purchase rates. "
-        "Historical purchase costs are not separately recorded."
-    )
-
-    st.subheader("ORDER SUMMARY")
-
-    st.write("Total Orders:", len(orders))
-    st.write("Completed Orders:", len(completed))
-    st.write("Pending Orders:", pending if 'pending' in locals() else sum(
-        1 for o in orders if o.get("status") == "Pending"
-    ))
-
-# ==========================================
-# STOCK MANAGEMENT
-# ==========================================
-
-elif st.session_state.is_admin and menu == "STOCK":
-
-    st.subheader("STOCK MANAGEMENT")
-
-    for p in st.session_state.products:
-
-        with st.container(border=True):
-
-            st.write(f"**{p.get('name')}**")
-
-            st.write(
-                f"Available Stock: {p.get('stock', 0)}"
-            )
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                if st.button(
-                    "+1",
-                    key="plus_" + p["product_id"]
-                ):
-                    p["stock"] = int(p.get("stock", 0)) + 1
-                    save_json(PRODUCT_FILE, st.session_state.products)
-                    st.rerun()
-
-            with col2:
-                if st.button(
-                    "-1",
-                    key="minus_" + p["product_id"]
-                ):
-                    p["stock"] = max(
-                        0,
-                        int(p.get("stock", 0)) - 1
-                    )
-                    save_json(PRODUCT_FILE, st.session_state.products)
-                    st.rerun()
-
-            with col3:
-                if int(p.get("stock", 0)) <= 5:
-                    st.warning("LOW STOCK")
-
-# ==========================================
-# BACKUP AND RESTORE
-# ==========================================
-
-elif st.session_state.is_admin and menu == "BACKUP & RESTORE":
-
-    st.subheader("BACKUP & RESTORE")
-
-    products_json = json.dumps(
-        st.session_state.products,
-        ensure_ascii=False,
-        indent=2
-    )
-
-    orders_json = json.dumps(
-        st.session_state.orders,
-        ensure_ascii=False,
-        indent=2
-    )
-
-    st.download_button(
-        "DOWNLOAD PRODUCTS BACKUP",
-        products_json,
-        file_name="mehar_products_backup.json",
-        mime="application/json",
-        use_container_width=True
-    )
-
-    st.download_button(
-        "DOWNLOAD ORDERS BACKUP",
-        orders_json,
-        file_name="mehar_orders_backup.json",
-        mime="application/json",
-        use_container_width=True
-    )
-
-    st.divider()
-
-    st.subheader("RESTORE BACKUP")
-
-    restore_type = st.selectbox(
-        "Select Backup Type",
-        ["Products", "Orders"]
-    )
-
-    uploaded_backup = st.file_uploader(
-        "Upload JSON Backup",
-        type=["json"]
-    )
-
-    if uploaded_backup and st.button(
-        "RESTORE BACKUP",
-        type="primary"
-    ):
-
-        try:
-            restored = json.load(uploaded_backup)
-
-            if not isinstance(restored, list):
-                raise ValueError("Backup must contain a list.")
-
-            if restore_type == "Products":
-
-                restored, _ = normalize_products(restored)
-
-                if save_json(PRODUCT_FILE, restored):
-                    st.session_state.products = restored
-                    st.success("Products Restored!")
-                    st.rerun()
-
+    elif menu == "PRODUCT SYSTEM":
+        st.subheader("Add / Edit Products")
+        product_ids = ["NEW"] + [p.get("product_id") for p in products]
+        selected_id = st.selectbox("Product edit karne ke liye select karein", product_ids,
+            format_func=lambda pid: "➕ New Product" if pid == "NEW" else next((p.get("name", "Product") for p in products if p.get("product_id") == pid), str(pid)))
+        editing = next((p for p in products if p.get("product_id") == selected_id), None) if selected_id != "NEW" else None
+        cats = st.session_state.categories
+        with st.form("product_editor"):
+            old_cat = editing.get("category", cats[0]) if editing else cats[0]
+            cat_idx = cats.index(old_cat) if old_cat in cats else 0
+            category = st.selectbox("Category", cats, index=cat_idx)
+            name = st.text_input("Product Name *", value=editing.get("name", "") if editing else "")
+            c1, c2 = st.columns(2)
+            with c1:
+                purchase = st.number_input("Kharid Rate", min_value=0, max_value=1000000,
+                    value=num(editing.get("kharid", editing.get("buy", 0))) if editing else 0, step=10)
+            with c2:
+                selling = st.number_input("Original Selling Rate", min_value=0, max_value=1000000,
+                    value=num(editing.get("sell", editing.get("final", 0))) if editing else 0, step=10)
+            c3, c4 = st.columns(2)
+            with c3:
+                discount = st.number_input("Discount %", min_value=0, max_value=90,
+                    value=num(editing.get("discount", 0)) if editing else 0)
+            with c4:
+                stock = st.number_input("Stock", min_value=0, max_value=100000,
+                    value=num(editing.get("stock", 0)) if editing else 0)
+            expiry_default = datetime.now().date() + timedelta(days=180)
+            try:
+                if editing and editing.get("expiry"):
+                    expiry_default = datetime.strptime(editing["expiry"], "%Y-%m-%d").date()
+            except Exception:
+                pass
+            expiry = st.date_input("Expiry", value=expiry_default)
+            highlights = st.text_area("Highlights", value=editing.get("highlights", "") if editing else "100% Pure — No Sugar, No Mix")
+            description = st.text_area("Full Description", value=editing.get("full_desc", "") if editing else "MEHAR MART — Cash on Delivery")
+            specs = st.text_area("Specifications", value=editing.get("specs", "") if editing else "")
+            photo = st.file_uploader("Product Photo", type=["jpg", "jpeg", "png", "webp"])
+            submitted = st.form_submit_button("UPDATE PRODUCT" if editing else "SAVE PRODUCT", type="primary", use_container_width=True)
+        if submitted:
+            if not name.strip():
+                st.error("Product name likhein.")
             else:
-
-                valid = all(
-                    isinstance(o, dict)
-                    and "id" in o
-                    and isinstance(o.get("products", []), list)
-                    for o in restored
-                )
-
-                if not valid:
-                    raise ValueError("Invalid orders backup.")
-
-                if save_json(ORDERS_FILE, restored):
-                    st.session_state.orders = restored
-                    st.success("Orders Restored!")
-                    st.rerun()
-
-        except Exception as e:
-            st.error(f"Restore Error: {e}")
-
-# ==========================================
-# SETTINGS
-# ==========================================
-
-elif st.session_state.is_admin and menu == "SETTINGS":
-
-    st.subheader("ADMIN SETTINGS")
-
-    with st.form("password_change"):
-
-        old_password = st.text_input(
-            "Old Password",
-            type="password"
-        )
-
-        new_password = st.text_input(
-            "New Password",
-            type="password"
-        )
-
-        confirm_password = st.text_input(
-            "Confirm New Password",
-            type="password"
-        )
-
-        change = st.form_submit_button(
-            "CHANGE PASSWORD",
-            type="primary"
-        )
-
-    if change:
-
-        if not check_password(old_password):
-            st.error("Old password incorrect!")
-
-        elif len(new_password) < 8:
-            st.error("New password kam az kam 8 characters ka hona chahiye.")
-
-        elif new_password != confirm_password:
-            st.error("Passwords do not match!")
-
-        elif save_password(new_password):
-            st.success("Password Changed Successfully!")
-
-    st.divider()
-
-    st.subheader("STORE CATEGORIES")
-
-    for cat in st.session_state.categories:
-        st.write("•", cat)
-
-    new_category = st.text_input("Add New Category")
-
-    if st.button("ADD CATEGORY"):
-
-        category = new_category.strip().upper()
-
-        if category and category not in st.session_state.categories:
-            st.session_state.categories.append(category)
-            save_json(CAT_FILE, st.session_state.categories)
-            st.success("Category Added!")
-            st.rerun()
-
-# ==========================================
-# CUSTOMER STORE
-# ==========================================
-
-else:
-
-    refresh_products()
-
-    products = [
-        p for p in st.session_state.products
-        if isinstance(p, dict)
-    ]
-
-    if st.session_state.selected_product:
-
-        p = get_product(st.session_state.selected_product)
-
-        if p:
-
-            if st.button("← BACK TO STORE"):
-                st.session_state.selected_product = None
+                final_price = round(selling * (1 - discount / 100))
+                image_data = img_b64(photo) if photo else (editing.get("image_b64") if editing else None)
+                item = {
+                    "product_id": editing.get("product_id") if editing else secrets.token_hex(6),
+                    "name": name.strip(), "category": category,
+                    "sell": num(selling), "kharid": num(purchase), "buy": num(purchase),
+                    "discount": num(discount), "final": num(final_price),
+                    "stock": num(stock), "expiry": expiry.strftime("%Y-%m-%d"),
+                    "profit": num(final_price) - num(purchase),
+                    "highlights": highlights, "full_desc": description, "specs": specs,
+                    "image_b64": image_data
+                }
+                if editing:
+                    index = next(i for i, p in enumerate(products) if p.get("product_id") == selected_id)
+                    products[index] = item
+                else:
+                    products.append(item)
+                st.session_state.products = products
+                save_json(PRODUCT_FILE, products)
+                st.success("Product save/update ho gaya.")
                 st.rerun()
 
-            img = image_from_product(p)
-
-            if img:
-                st.image(img, use_container_width=True)
-
-            st.title(p.get("name", "Product"))
-
-            st.caption(p.get("category", ""))
-
-            st.markdown(
-                f'<div class="price">Rs. {p.get("final", 0)}</div>',
-                unsafe_allow_html=True
-            )
-
-            st.write(p.get("highlights", ""))
-
-            st.write(p.get("full_desc", ""))
-
-            st.write("Specifications:")
-            st.write(p.get("specs", ""))
-
-            st.write(
-                f"Stock Available: {p.get('stock', 0)}"
-            )
-
-            if st.button(
-                "ADD TO CART",
-                type="primary",
-                use_container_width=True,
-                disabled=int(p.get("stock", 0)) <= 0
-            ):
-
-                st.session_state.cart.append(
-                    p["product_id"]
-                )
-
-                st.success("Added to Cart!")
+        if products:
+            st.markdown("#### Delete Product")
+            del_id = st.selectbox("Delete ke liye product", [p.get("product_id") for p in products],
+                format_func=lambda pid: next((p.get("name", "Product") for p in products if p.get("product_id") == pid), str(pid)),
+                key="delete_product_id")
+            if st.button("DELETE SELECTED PRODUCT"):
+                st.session_state.products = [p for p in products if p.get("product_id") != del_id]
+                save_json(PRODUCT_FILE, st.session_state.products)
                 st.rerun()
 
-            if st.button(
-                f"BUY NOW - Rs.{p.get('final', 0)}",
-                use_container_width=True,
-                disabled=int(p.get("stock", 0)) <= 0
-            ):
+        st.divider()
+        st.subheader("Add Custom Category")
+        with st.form("add_category_form"):
+            new_category = st.text_input("New category name")
+            add_category = st.form_submit_button("Add Category")
+        if add_category and new_category.strip():
+            value = new_category.strip().upper()
+            if value not in st.session_state.categories:
+                st.session_state.categories.append(value)
+                save_json(CAT_FILE, st.session_state.categories)
+                st.rerun()
+            else:
+                st.warning("Category pehle se mojood hai.")
 
-                oid = create_order([p], p.get("final", 0))
-
-                message = get_whatsapp_msg(
-                    oid,
-                    [p],
-                    p.get("final", 0)
-                )
-
-                st.link_button(
-                    "CONFIRM ORDER ON WHATSAPP",
-                    whatsapp_link(message),
-                    type="primary",
-                    use_container_width=True
-                )
-
+    elif menu == "ORDERS - DARAZ":
+        st.subheader("Orders")
+        if not orders:
+            st.info("Abhi koi order nahi.")
         else:
-            st.session_state.selected_product = None
-            st.rerun()
-
-    else:
-
-        st.markdown("### 🛍️ SHOP OUR PRODUCTS")
-
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            search = st.text_input(
-                "Search",
-                placeholder="Search products..."
-            )
-
-        with col2:
-            cart_count = len(st.session_state.cart)
-            st.metric("Cart", cart_count)
-
-        categories = ["All"] + st.session_state.categories
-
-        category = st.selectbox(
-            "Select Category",
-            categories
-        )
-
-        # CART
-
-        if st.session_state.cart:
-
-            with st.container(border=True):
-
-                st.subheader("🛒 YOUR CART")
-
-                cart_products = []
-
-                for product_id in st.session_state.cart:
-                    product = get_product(product_id)
-
-                    if product:
-                        cart_products.append(product)
-
-                for i, item in enumerate(cart_products):
-
-                    c1, c2 = st.columns([4, 1])
-
-                    with c1:
-                        st.write(
-                            f"{item.get('name')} - "
-                            f"Rs.{item.get('final')}"
-                        )
-
-                    with c2:
-                        if st.button("X", key=f"remove_{i}"):
-                            st.session_state.cart.pop(i)
+            filter_status = st.selectbox("Filter", ["All", "Pending", "Confirmed", "Delivered", "Cancelled", "Returned"])
+            shown = orders if filter_status == "All" else [o for o in orders if o.get("status") == filter_status]
+            for order in reversed(shown):
+                idx = next((i for i, o in enumerate(orders) if o.get("id") == order.get("id")), None)
+                if idx is None:
+                    continue
+                with st.container(border=True):
+                    st.write(f"**Order ID:** {order.get('id','')} | {order.get('time','')}")
+                    st.write(f"**{order.get('status','Pending')}** — Rs. {num(order.get('total')):,}")
+                    for item in order.get("products", []):
+                        st.caption(f"• {item.get('name','')} — Rs. {num(item.get('price')):,} — {item.get('category','')}")
+                    if order.get("reason"):
+                        st.warning(order["reason"])
+                    x, y, z = st.columns(3)
+                    with x:
+                        if st.button("✅ Confirm", key=f"confirm_{idx}", use_container_width=True):
+                            orders[idx]["status"] = "Confirmed"
+                            save_json(ORDERS_FILE, orders)
+                            st.rerun()
+                    with y:
+                        if st.button("📦 Delivered", key=f"delivered_{idx}", use_container_width=True):
+                            orders[idx]["status"] = "Delivered"
+                            save_json(ORDERS_FILE, orders)
+                            st.rerun()
+                    with z:
+                        if st.button("❌ Cancel", key=f"cancel_{idx}", use_container_width=True):
+                            orders[idx]["status"] = "Cancelled"
+                            save_json(ORDERS_FILE, orders)
+                            st.rerun()
+                    with st.expander("Return / note"):
+                        note = st.text_input("Reason", value=order.get("reason", ""), key=f"reason_{idx}")
+                        if st.button("Mark Returned", key=f"returned_{idx}"):
+                            orders[idx]["status"] = "Returned"
+                            orders[idx]["reason"] = note
+                            save_json(ORDERS_FILE, orders)
+                            st.rerun()
+                        if st.button("Save Note", key=f"save_note_{idx}"):
+                            orders[idx]["reason"] = note
+                            save_json(ORDERS_FILE, orders)
                             st.rerun()
 
-                cart_total = sum(
-                    int(p.get("final", 0))
-                    for p in cart_products
-                )
+    elif menu == "MONEY":
+        confirmed_orders = [o for o in orders if o.get("status") in ("Confirmed", "Delivered")]
+        pending_orders = [o for o in orders if o.get("status") == "Pending"]
+        sales = sum(num(o.get("total")) for o in confirmed_orders)
+        estimated_cost = 0
+        for order in confirmed_orders:
+            for item in order.get("products", []):
+                product = next((p for p in products if p.get("product_id") == item.get("product_id")), None)
+                if product:
+                    estimated_cost += num(product.get("kharid", product.get("buy", 0))) * num(item.get("quantity", 1))
+        a, b = st.columns(2)
+        a.metric("Pending Orders", len(pending_orders))
+        b.metric("Confirmed / Delivered", len(confirmed_orders))
+        a, b = st.columns(2)
+        a.metric("Sales Amount", f"Rs. {sales:,}")
+        b.metric("Estimated Product Cost", f"Rs. {estimated_cost:,}")
+        st.metric("Estimated Gross Difference", f"Rs. {sales - estimated_cost:,}")
+        st.caption("Cost estimate current purchase rates par hai; historical purchase rate alag save nahi hota.")
 
-                st.subheader(f"TOTAL: Rs.{cart_total}")
+    elif menu == "STOCK":
+        st.subheader("Stock Management")
+        for i, product in enumerate(products):
+            with st.container(border=True):
+                st.write(f"**{product.get('name','')}** — {product.get('category','')} — Stock: **{num(product.get('stock'))}**")
+                a, b, c = st.columns(3)
+                with a:
+                    if st.button("➕ Plus 1", key=f"plus_{i}", use_container_width=True):
+                        products[i]["stock"] = num(product.get("stock")) + 1
+                        save_json(PRODUCT_FILE, products)
+                        st.rerun()
+                with b:
+                    if st.button("➖ Minus 1", key=f"minus_{i}", use_container_width=True):
+                        products[i]["stock"] = max(0, num(product.get("stock")) - 1)
+                        save_json(PRODUCT_FILE, products)
+                        st.rerun()
+                with c:
+                    updated_stock = st.number_input("Set stock", min_value=0, value=num(product.get("stock")), key=f"set_{i}")
+                    if st.button("Update", key=f"set_btn_{i}", use_container_width=True):
+                        products[i]["stock"] = num(updated_stock)
+                        save_json(PRODUCT_FILE, products)
+                        st.rerun()
 
-                can_checkout = bool(cart_products) and all(
-                    int(p.get("stock", 0)) > 0
-                    for p in cart_products
-                )
+    elif menu == "BACKUP":
+        st.subheader("Backup & Restore")
+        st.download_button("📥 Download Products Backup", json.dumps(products, ensure_ascii=False, indent=2),
+                           file_name="mehar_products_backup.json", mime="application/json", use_container_width=True)
+        st.download_button("📥 Download Orders Backup", json.dumps(orders, ensure_ascii=False, indent=2),
+                           file_name="mehar_orders_backup.json", mime="application/json", use_container_width=True)
+        product_upload = st.file_uploader("Restore Products JSON", type=["json"], key="restore_products")
+        if product_upload and st.button("Restore Products"):
+            try:
+                data = json.load(product_upload)
+                if isinstance(data, list):
+                    migrate_products(data)
+                    st.session_state.products = data
+                    save_json(PRODUCT_FILE, data)
+                    st.success("Products restore ho gaye.")
+                    st.rerun()
+                else:
+                    st.error("Invalid products backup.")
+            except Exception as e:
+                st.error(f"Restore error: {e}")
+        order_upload = st.file_uploader("Restore Orders JSON", type=["json"], key="restore_orders")
+        if order_upload and st.button("Restore Orders"):
+            try:
+                data = json.load(order_upload)
+                if isinstance(data, list):
+                    save_json(ORDERS_FILE, data)
+                    st.success("Orders restore ho gaye.")
+                    st.rerun()
+                else:
+                    st.error("Invalid orders backup.")
+            except Exception as e:
+                st.error(f"Restore error: {e}")
 
-                if st.button(
-                    "CHECKOUT",
-                    type="primary",
-                    use_container_width=True,
-                    disabled=not can_checkout
-                ):
+    elif menu == "SETTINGS":
+        st.subheader("Settings")
+        if st.session_state.logo_b64:
+            try:
+                st.image(Image.open(io.BytesIO(base64.b64decode(st.session_state.logo_b64))), width=110)
+            except Exception:
+                pass
+        logo_upload = st.file_uploader("Upload Store Logo", type=["png", "jpg", "jpeg"], key="store_logo")
+        if logo_upload and st.button("Save Logo"):
+            try:
+                st.session_state.logo_b64 = img_b64(logo_upload, (300, 300), "PNG")
+                save_json(LOGO_FILE, st.session_state.logo_b64)
+                st.success("Logo save ho gaya.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Logo error: {e}")
 
-                    oid = create_order(
-                        cart_products,
-                        cart_total
-                    )
+        st.divider()
+        st.subheader("Change Admin Password")
+        with st.form("password_change"):
+            old = st.text_input("Old password", type="password")
+            new = st.text_input("New password (minimum 10 characters)", type="password")
+            confirm = st.text_input("Confirm new password", type="password")
+            change = st.form_submit_button("Change Password", type="primary")
+        if change:
+            if not password_ok(old):
+                st.error("Old password ghalat hai.")
+            elif len(new) < 10:
+                st.error("New password kam az kam 10 characters ka ho.")
+            elif new != confirm:
+                st.error("New passwords match nahi karte.")
+            else:
+                set_password(new)
+                st.success("Password update ho gaya.")
 
-                    message = get_whatsapp_msg(
-                        oid,
-                        cart_products,
-                        cart_total
-                    )
+        st.divider()
+        st.warning("Neeche ke actions permanent hain.")
+        if st.button("DELETE ALL ORDERS"):
+            st.session_state.confirm_orders_delete = True
+        if st.session_state.get("confirm_orders_delete"):
+            st.error("Tamam orders delete karne hain?")
+            yes, no = st.columns(2)
+            with yes:
+                if st.button("Yes — delete orders"):
+                    save_json(ORDERS_FILE, [])
+                    st.session_state.confirm_orders_delete = False
+                    st.rerun()
+            with no:
+                if st.button("No — keep orders"):
+                    st.session_state.confirm_orders_delete = False
+                    st.rerun()
+        if st.button("DELETE ALL PRODUCTS"):
+            st.session_state.confirm_products_delete = True
+        if st.session_state.get("confirm_products_delete"):
+            st.error("Tamam products delete karne hain?")
+            yes, no = st.columns(2)
+            with yes:
+                if st.button("Yes — delete products"):
+                    st.session_state.products = []
+                    save_json(PRODUCT_FILE, [])
+                    st.session_state.confirm_products_delete = False
+                    st.rerun()
+            with no:
+                if st.button("No — keep products"):
+                    st.session_state.confirm_products_delete = False
+                    st.rerun()
 
-                    st.session_state.cart = []
-                    st.session_state.notice = (
-                        f"Order {oid} created. WhatsApp par confirm karein."
-                    )
+    st.divider()
+    st.caption("Client URL: normal app link | Admin URL: normal app link ke end par ?admin=1")
+    if st.button("LOG OUT", type="primary", use_container_width=True):
+        st.session_state.admin_authenticated = False
+        st.query_params.clear()
+        st.rerun()
 
-                    st.link_button(
-                        "WHATSAPP ORDER CONFIRM",
-                        whatsapp_link(message),
-                        type="primary",
-                        use_container_width=True
-                    )
+def client_store():
+    # Reload current products on each run so admin changes appear in the public store.
+    products = load_json(PRODUCT_FILE, st.session_state.products)
+    if isinstance(products, list):
+        st.session_state.products = products
+    logo_html = ""
+    if st.session_state.logo_b64:
+        logo_html = f"<img src='data:image/png;base64,{st.session_state.logo_b64}' style='height:29px;margin-right:8px;background:white;border-radius:4px;padding:2px;'>"
+    st.markdown(f'<div class="mm-header"><span style="display:flex;align-items:center;">{logo_html}MEHAR MART</span><span>🛒 {len(st.session_state.cart)}</span></div>', unsafe_allow_html=True)
+    st.caption("Quality Products at Affordable Prices • Cash on Delivery • Delivery All Over Pakistan")
 
-        # FILTER PRODUCTS
+    selected_id = st.session_state.selected_product
+    if selected_id:
+        product = next((p for p in products if p.get("product_id") == selected_id), None)
+        if not product:
+            st.session_state.selected_product = None
+            st.rerun()
+        if st.button("⬅ Back to Store", use_container_width=True):
+            st.session_state.selected_product = None
+            st.rerun()
+        show_image(product)
+        st.subheader(product.get("name", ""))
+        st.caption(product.get("category", ""))
+        st.markdown(f'<div class="mm-price">Rs. {num(product.get("final")):,}</div><span class="mm-old">Rs. {num(product.get("sell", product.get("final"))):,}</span> &nbsp; <b>{num(product.get("discount"))}% OFF</b>', unsafe_allow_html=True)
+        if num(product.get("stock")) <= 0:
+            st.error("Out of stock")
+        else:
+            a, b = st.columns(2)
+            with a:
+                if st.button("Add to Cart", type="primary", use_container_width=True):
+                    st.session_state.cart.append(product)
+                    st.rerun()
+            with b:
+                if st.button("Buy Now", use_container_width=True):
+                    oid = make_order([product], num(product.get("final")))
+                    st.success(f"Order {oid} place ho gaya.")
+                    wa_button(oid, [product], num(product.get("final")))
+        st.divider()
+        st.subheader("Highlights")
+        st.write(product.get("highlights", ""))
+        st.subheader("Description")
+        st.write(product.get("full_desc", ""))
+        st.subheader("Specifications")
+        st.write(product.get("specs", ""))
+        return
 
-        filtered = products
+    options = ["All"] + st.session_state.categories
+    current = st.session_state.selected_category
+    index = options.index(current) if current in options else 0
+    selected = st.selectbox("Select Category", options, index=index)
+    st.session_state.selected_category = selected
+    search = st.text_input("Search products", placeholder="Search products...")
+    visible = [p for p in products if isinstance(p, dict)]
+    if selected != "All":
+        visible = [p for p in visible if str(p.get("category", "")).upper() == selected.upper()]
+    if search.strip():
+        term = search.strip().lower()
+        visible = [p for p in visible if term in str(p.get("name", "")).lower() or term in str(p.get("category", "")).lower()]
 
-        if category != "All":
-            filtered = [
-                p for p in filtered
-                if p.get("category", "").upper() == category.upper()
-            ]
+    if st.session_state.cart:
+        with st.container(border=True):
+            st.subheader(f"Cart — {len(st.session_state.cart)} products")
+            total = 0
+            for i, item in enumerate(st.session_state.cart):
+                a, b = st.columns([4, 1])
+                with a:
+                    st.write(f"**{item.get('name','')}** — Rs. {num(item.get('final')):,}")
+                with b:
+                    if st.button("Remove", key=f"remove_cart_{i}"):
+                        st.session_state.cart.pop(i)
+                        st.rerun()
+                total += num(item.get("final"))
+            st.write(f"**Total: Rs. {total:,}**")
+            if st.button(f"Checkout — Rs. {total:,}", type="primary", use_container_width=True):
+                items = st.session_state.cart[:]
+                oid = make_order(items, total)
+                st.session_state.cart = []
+                st.success(f"Order {oid} place ho gaya.")
+                wa_button(oid, items, total)
+            if st.button("Clear Cart", use_container_width=True):
+                st.session_state.cart = []
+                st.rerun()
 
-        if search.strip():
-            filtered = [
-                p for p in filtered
-                if search.lower() in p.get("name", "").lower()
-            ]
-
-        st.write(f"**{len(filtered)} Products Found**")
-
-        if not filtered:
-            st.info("Is category mein abhi products available nahi hain.")
-
+    st.write(f"**{len(visible)} Products**")
+    if not visible:
+        st.info("Is category mein abhi products available nahi.")
+    for start in range(0, len(visible), 2):
         cols = st.columns(2)
-
-        for i, p in enumerate(filtered):
-
-            with cols[i % 2]:
-
+        for col, product in zip(cols, visible[start:start+2]):
+            with col:
                 with st.container(border=True):
+                    show_image(product)
+                    st.write(f"**{product.get('name','')}**")
+                    st.caption(product.get("category", ""))
+                    st.markdown(f'<div class="mm-price">Rs. {num(product.get("final")):,}</div><span class="mm-old">Rs. {num(product.get("sell", product.get("final"))):,}</span>', unsafe_allow_html=True)
+                    if num(product.get("stock")) <= 0:
+                        st.caption("Out of stock")
+                    else:
+                        pid = product.get("product_id")
+                        if st.button("View Details", key=f"view_{pid}", use_container_width=True):
+                            st.session_state.selected_product = pid
+                            st.rerun()
+                        if st.button("Add to Cart", key=f"add_{pid}", type="primary", use_container_width=True):
+                            st.session_state.cart.append(product)
+                            st.rerun()
+                        if st.button(f"Buy Now — Rs. {num(product.get('final')):,}", key=f"buy_{pid}", use_container_width=True):
+                            oid = make_order([product], num(product.get("final")))
+                            st.success(f"Order {oid} place ho gaya.")
+                            wa_button(oid, [product], num(product.get("final")))
 
-                    img = image_from_product(p)
-
-                    if img:
-                        st.image(
-                            img,
-                            use_container_width=True
-                        )
-
-                    st.write(f"**{p.get('name', '')}**")
-
-                    st.caption(
-                        p.get("category", "")
-                    )
-
-                    st.markdown(
-                        f'<div class="price">Rs.{p.get("final", 0)}</div>',
-                        unsafe_allow_html=True
-                    )
-
-                    if p.get("discount", 0):
-                        st.caption(
-                            f"{p.get('discount')}% OFF"
-                        )
-
-                    if int(p.get("stock", 0)) <= 0:
-                        st.error("Out of Stock")
-
-                    if st.button(
-                        "VIEW DETAILS",
-                        key="view_" + p["product_id"],
-                        use_container_width=True
-                    ):
-                        st.session_state.selected_product = p["product_id"]
-                        st.rerun()
-
-                    if st.button(
-                        "ADD TO CART",
-                        key="add_" + p["product_id"],
-                        type="primary",
-                        use_container_width=True,
-                        disabled=int(p.get("stock", 0)) <= 0
-                    ):
-                        st.session_state.cart.append(
-                            p["product_id"]
-                        )
-                        st.rerun()
-
-                    if st.button(
-                        "BUY NOW",
-                        key="buy_" + p["product_id"],
-                        use_container_width=True,
-                        disabled=int(p.get("stock", 0)) <= 0
-                    ):
-
-                        oid = create_order(
-                            [p],
-                            p.get("final", 0)
-                        )
-
-                        message = get_whatsapp_msg(
-                            oid,
-                            [p],
-                            p.get("final", 0)
-                        )
-
-                        st.link_button(
-                            "WHATSAPP CONFIRM",
-                            whatsapp_link(message),
-                            use_container_width=True
-                        )
-
-# ==========================================
-# JARVIS AI CUSTOMER ASSISTANT
-# ==========================================
-
-st.divider()
-
-st.header("🤖 MEHAR MART AI AGENT - JARVIS")
-
-st.caption(
-    "Smart Product Assistant | Basic Mode | No Gemini API Required"
-)
-
-for chat in st.session_state.chat_history:
-    with st.chat_message(chat["role"]):
-        st.write(chat["content"])
-
-user_question = st.chat_input(
-    "Salam! Product ke bare mein poochhein..."
-)
-
-if user_question:
-
-    st.session_state.chat_history.append({
-        "role": "user",
-        "content": user_question
-    })
-
-    answer = get_smart_answer(user_question)
-
-    st.session_state.chat_history.append({
-        "role": "assistant",
-        "content": answer
-    })
-
-    st.rerun()
-
-if st.button("CLEAR CHAT"):
-    st.session_state.chat_history = [
-        {
-            "role": "assistant",
-            "content": "Salam Bhai! Mehar Mart mein khush amdeed!"
-        }
-    ]
-    st.rerun()
-
-st.divider()
-
-st.markdown(
-    """
-    **MEHAR MART**
-
-    Quality Products at Affordable Prices
-
-    Cash on Delivery | Delivery All Over Pakistan
-
-    """
-)
-
-st.link_button(
-    "CONTACT MEHAR MART ON WHATSAPP",
-    "https://wa.me/" + WA_NUMBER,
-    use_container_width=True
-)
+# APP ENTRY POINT
+if admin_route:
+    if st.session_state.admin_authenticated:
+        admin_panel()
+    else:
+        admin_login()
+else:
+    # Public route contains only the shopping store. No admin link/button/login/panel.
+    st.session_state.admin_authenticated = False
+    client_store()
