@@ -1,53 +1,43 @@
-# MEHAR MART V94 - Permanent Cloud Edition
+# MEHAR MART V104 — Permanent Cloud Edition
 
-## Files
-- `app.py` - Streamlit store + private admin panel
-- `requirements.txt` - Python packages
-- `supabase_schema.sql` - Database tables
+V104 preserves the V94 Streamlit + Supabase system and includes the order-confirmation stock fix.
 
-## 1. Create Supabase tables
-1. Open Supabase Dashboard.
-2. Open SQL Editor -> New query.
-3. Paste all of `supabase_schema.sql`.
-4. Click Run.
+## Order / stock rules
+- Confirming an order subtracts only the ordered quantity from each matching product's stock.
+- A product is NEVER deleted when an order is confirmed.
+- If stock reaches 0, the product remains visible in the public shop with **Out of Stock** status.
+- Add to Cart is disabled when stock is 0.
+- Product deletion is available only through the Admin Product System's manual **Delete** button.
+- Confirmation is protected against duplicate stock deductions using the `stock_deducted` order flag.
+- If inventory is insufficient or a product record is missing, confirmation is blocked and stock is not changed.
 
-## 2. Add Streamlit Cloud Secrets
-Open Streamlit Community Cloud -> your app -> Settings -> Secrets.
-Add:
+Examples: stock 10, order quantity 1 → stock 9, product remains visible.
+Stock 1, order quantity 1 → stock 0, product remains visible as Out of Stock.
+
+## Package files
+- `app.py` — complete Streamlit storefront and private Admin panel
+- `requirements.txt` — Python dependencies
+- `supabase_schema.sql` — Supabase tables and triggers
+- `README.txt` — setup and deployment guide
+- `tests/test_stock_logic.py` — regression tests for stock behavior
+
+## Supabase setup
+1. Supabase Dashboard → SQL Editor → New query → run `supabase_schema.sql`.
+2. Streamlit Community Cloud → your app → Settings → Secrets:
 
 ```toml
 SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_SECRET_KEY = "sb_secret_YOUR_SECRET_KEY"
-ADMIN_PASSWORD = "SetYourOwnStrongAdminPassword"
+ADMIN_PASSWORD = "ChooseYourOwnStrongPassword"
 ```
 
-IMPORTANT:
-- Use the `sb_secret_...` key only in Streamlit server Secrets.
-- Never put `sb_secret_...` in app.py, GitHub, browser code, or chat.
-- The publishable key is not used by this server-side V94 setup.
-- Do not send secrets/screenshots that reveal secret values.
+Keep the `sb_secret_...` key only in Streamlit server Secrets. Never paste it into chat, GitHub, app.py, or browser code.
 
-## 3. Deploy
-Upload `app.py`, `requirements.txt` to the GitHub repository used by Streamlit Cloud.
-Keep V93 separately as a backup; do not overwrite your only V93 copy.
+## Deploy
+1. Keep your original V93 and V94 backups unchanged.
+2. Upload this package's `app.py` and `requirements.txt` to the GitHub repository connected to Streamlit Cloud.
+3. Confirm the Supabase schema and Streamlit Secrets are configured.
+4. Public store URL: your normal Streamlit URL.
+5. Admin URL: append `?admin=1` to the public URL and log in with `ADMIN_PASSWORD`.
 
-## 4. Admin
-Open the public app URL and append `?admin=1` to the URL.
-Example: `https://your-app.streamlit.app/?admin=1`
-Log in using `ADMIN_PASSWORD` set in Streamlit Secrets.
-
-After first login, V94 stores a salted PBKDF2 password hash in Supabase. You can then change the password from Admin -> SETTINGS.
-
-## 5. V93 data migration
-V94 can import local V93 JSON files only if those files are present in the Streamlit app runtime during the first launch:
-- products.json or products_backup.json
-- orders.json or orders_backup.json
-- categories.json
-- logo.json
-
-If Streamlit Cloud has already lost those files, use V93 Admin -> BACKUP to download the JSON backups and then use V94 Admin -> BACKUP to restore products. Orders can be imported by preparing an orders JSON importer in a future patch; keep your original order backup safe.
-
-## Notes
-- Product images are stored as base64 inside JSONB product data. This is easy for a small shop migration, but large catalogs may eventually benefit from Supabase Storage.
-- This is a first cloud-connected V94 release. Test with one sample product and one test order before sharing the public link widely.
-- The Streamlit admin login is server-side. Do not expose Supabase secret key to customers.
+This ZIP does not contain your Supabase secret key or live database contents. Test with one sample product/order before accepting real orders.
