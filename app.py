@@ -423,7 +423,11 @@ if st.session_state.is_admin:
                 st.rerun()
 
         existing_ids = [p.get("id") for p in products]
-        edit_options = ["➕ Add New Product"] + [f"{p.get('name','Unnamed')} — {p.get('id','')[:8]}" for p in products]
+        edit_options = ["➕ Add New Product"] + [
+    f"{p.get('name', 'Unnamed')} — {str(p.get('id') or '')[:8]}"
+    for p in products
+    if isinstance(p, dict)
+]
         choice = st.selectbox("Select product to edit", edit_options)
         editing = None
         if choice != "➕ Add New Product":
